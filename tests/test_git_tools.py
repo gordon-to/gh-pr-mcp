@@ -169,6 +169,11 @@ def test_branch_list(git_repo):
     assert "main" in result
 
 
+def test_branch_list_verbose(git_repo):
+    result = branch_list(str(git_repo), verbose=True)
+    assert "main" in result
+
+
 def test_branch_create_and_checkout(git_repo):
     branch_create(str(git_repo), name="feature/test", checkout=True)
     result = branch_list(str(git_repo))
