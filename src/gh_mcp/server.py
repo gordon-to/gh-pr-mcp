@@ -155,7 +155,34 @@ def git_init(path: str, initial_branch: str = "main") -> str:
 
 
 # ===========================================================================
-# Git: remote / network (ask)
+# Git: remote-read — always-allow or ask (network, read-only local effect)
+# ===========================================================================
+
+@mcp.tool()
+def git_fetch(repo_path: str = ".", remote: str = "origin", prune: bool = True) -> str:
+    """fetch from remote without merging. git:remote-read — safe to always-allow."""
+    return _wrap(git.fetch, repo_path, remote=remote, prune=prune)
+
+
+@mcp.tool()
+def git_pull(
+    repo_path: str = ".",
+    remote: str = "origin",
+    branch: str = "",
+    rebase: bool = False,
+) -> str:
+    """pull and integrate remote commits. git:remote-read — safe to always-allow."""
+    return _wrap(git.pull, repo_path, remote=remote, branch=branch, rebase=rebase)
+
+
+@mcp.tool()
+def git_clone(url: str, destination: str = "", branch: str = "", depth: int = 0) -> str:
+    """clone a remote repository. git:remote-read."""
+    return _wrap(git.clone, url, destination=destination, branch=branch, depth=depth)
+
+
+# ===========================================================================
+# Git: remote-write — ask (writes to remote)
 # ===========================================================================
 
 @mcp.tool()
@@ -166,82 +193,13 @@ def git_push(
     set_upstream: bool = False,
     tags: bool = False,
 ) -> str:
-    """push commits to remote. requires network. ask before running."""
+    """push commits to remote. git:remote-write — ask before running."""
     return _wrap(git.push, repo_path, remote=remote, branch=branch, set_upstream=set_upstream, tags=tags)
 
 
 @mcp.tool()
-def git_push_force(
-    repo_path: str = ".",
-    remote: str = "origin",
-    branch: str = "",
-    with_lease: bool = True,
-) -> str:
-    """force-push to remote — rewrites remote history. DESTRUCTIVE. ask before running."""
-    return _wrap(git.push_force, repo_path, remote=remote, branch=branch, with_lease=with_lease)
-
-
-@mcp.tool()
-def git_pull(
-    repo_path: str = ".",
-    remote: str = "origin",
-    branch: str = "",
-    rebase: bool = False,
-) -> str:
-    """pull commits from remote. requires network. ask before running."""
-    return _wrap(git.pull, repo_path, remote=remote, branch=branch, rebase=rebase)
-
-
-@mcp.tool()
-def git_fetch(repo_path: str = ".", remote: str = "origin", prune: bool = True) -> str:
-    """fetch from remote without merging. requires network. ask before running."""
-    return _wrap(git.fetch, repo_path, remote=remote, prune=prune)
-
-
-@mcp.tool()
-def git_clone(url: str, destination: str = "", branch: str = "", depth: int = 0) -> str:
-    """clone a remote repository. requires network. ask before running."""
-    return _wrap(git.clone, url, destination=destination, branch=branch, depth=depth)
-
-
-@mcp.tool()
-def git_merge(
-    repo_path: str,
-    branch: str,
-    no_ff: bool = False,
-    squash: bool = False,
-) -> str:
-    """merge a branch into current HEAD. ask before running."""
-    return _wrap(git.merge, repo_path, branch=branch, no_ff=no_ff, squash=squash)
-
-
-@mcp.tool()
-def git_rebase(repo_path: str, onto: str) -> str:
-    """rebase current branch onto another. ask before running."""
-    return _wrap(git.rebase, repo_path, onto=onto)
-
-
-@mcp.tool()
-def git_rebase_abort(repo_path: str = ".") -> str:
-    """abort an in-progress rebase. ask before running."""
-    return _wrap(git.rebase_abort, repo_path)
-
-
-@mcp.tool()
-def git_rebase_continue(repo_path: str = ".") -> str:
-    """continue a rebase after resolving conflicts. ask before running."""
-    return _wrap(git.rebase_continue, repo_path)
-
-
-@mcp.tool()
-def git_cherry_pick(repo_path: str, commits: list[str]) -> str:
-    """apply specific commits onto current HEAD. ask before running."""
-    return _wrap(git.cherry_pick, repo_path, commits=commits)
-
-
-@mcp.tool()
 def git_remote_add(repo_path: str, name: str, url: str) -> str:
-    """add a remote. ask before running."""
+    """add a remote. git:remote-write — ask before running."""
     return _wrap(git.remote_add, repo_path, name=name, url=url)
 
 
@@ -252,8 +210,62 @@ def git_tag_create(
     ref: str = "HEAD",
     message: str = "",
 ) -> str:
-    """create a tag (annotated if message given). ask before running."""
+    """create a tag (annotated if message given). git:remote-write — ask before running."""
     return _wrap(git.tag_create, repo_path, name=name, ref=ref, message=message)
+
+
+# ===========================================================================
+# Git: remote-destructive — ask/block (rewrites remote history)
+# ===========================================================================
+
+@mcp.tool()
+def git_push_force(
+    repo_path: str = ".",
+    remote: str = "origin",
+    branch: str = "",
+    with_lease: bool = True,
+) -> str:
+    """force-push — rewrites remote history. git:remote-destructive — ask/block."""
+    return _wrap(git.push_force, repo_path, remote=remote, branch=branch, with_lease=with_lease)
+
+
+# ===========================================================================
+# Git: integrate — ask (rewrites local history / topology)
+# ===========================================================================
+
+@mcp.tool()
+def git_merge(
+    repo_path: str,
+    branch: str,
+    no_ff: bool = False,
+    squash: bool = False,
+) -> str:
+    """merge a branch into current HEAD. git:integrate — ask before running."""
+    return _wrap(git.merge, repo_path, branch=branch, no_ff=no_ff, squash=squash)
+
+
+@mcp.tool()
+def git_rebase(repo_path: str, onto: str) -> str:
+    """rebase current branch onto another ref. git:integrate — ask before running."""
+    return _wrap(git.rebase, repo_path, onto=onto)
+
+
+@mcp.tool()
+def git_rebase_abort(repo_path: str = ".") -> str:
+    """abort an in-progress rebase. git:integrate — ask before running."""
+    return _wrap(git.rebase_abort, repo_path)
+
+
+@mcp.tool()
+def git_rebase_continue(repo_path: str = ".") -> str:
+    """continue a rebase after resolving conflicts. git:integrate — ask before running."""
+    return _wrap(git.rebase_continue, repo_path)
+
+
+@mcp.tool()
+def git_cherry_pick(repo_path: str, commits: list[str]) -> str:
+    """apply specific commits onto current HEAD. git:integrate — ask before running."""
+    return _wrap(git.cherry_pick, repo_path, commits=commits)
 
 
 @mcp.tool()
@@ -263,29 +275,29 @@ def git_worktree_add(
     branch: str,
     create_branch: bool = True,
 ) -> str:
-    """add a new worktree. create_branch=True creates a new branch at HEAD. ask before running."""
+    """add a new worktree. create_branch=True creates a new branch at HEAD. git:integrate — ask before running."""
     return _wrap(git.worktree_add, repo_path, path=path, branch=branch, create_branch=create_branch)
 
 
 @mcp.tool()
 def git_worktree_remove(repo_path: str, path: str, force: bool = False) -> str:
-    """remove a worktree. force=True removes even with uncommitted changes. ask before running."""
+    """remove a worktree. force=True removes even with uncommitted changes. git:integrate — ask before running."""
     return _wrap(git.worktree_remove, repo_path, path=path, force=force)
 
 
 # ===========================================================================
-# Git: destructive (ask)
+# Git: local-destructive — ask (discards local work, no network)
 # ===========================================================================
 
 @mcp.tool()
 def git_reset(repo_path: str, ref: str = "HEAD", mode: str = "mixed") -> str:
-    """reset HEAD — mode='hard' discards all uncommitted changes. DESTRUCTIVE. ask before running."""
+    """reset HEAD. mode='hard' discards all uncommitted changes. git:local-destructive — ask before running."""
     return _wrap(git.reset, repo_path, ref=ref, mode=mode)
 
 
 @mcp.tool()
 def git_restore(repo_path: str, paths: list[str], staged: bool = False) -> str:
-    """discard changes to files. staged=True unstages. DESTRUCTIVE. ask before running."""
+    """discard changes to files. staged=True unstages. git:local-destructive — ask before running."""
     return _wrap(git.restore, repo_path, paths=paths, staged=staged)
 
 
@@ -296,7 +308,7 @@ def git_clean(
     force: bool = True,
     dry_run: bool = False,
 ) -> str:
-    """remove untracked files. dry_run=True shows what would be deleted. DESTRUCTIVE. ask before running."""
+    """remove untracked files. dry_run=True previews without deleting. git:local-destructive — ask before running."""
     return _wrap(git.clean, repo_path, directories=directories, force=force, dry_run=dry_run)
 
 
@@ -307,7 +319,7 @@ def git_branch_delete(
     force: bool = False,
     remote: str = "",
 ) -> str:
-    """delete a branch. force=True deletes unmerged branches. ask before running."""
+    """delete a local branch. force=True deletes unmerged. git:local-destructive — ask before running."""
     return _wrap(git.branch_delete, repo_path, name=name, force=force, remote=remote)
 
 
@@ -342,8 +354,14 @@ def gh_pr_diff(pr: str, repo: str = "") -> str:
 
 @mcp.tool()
 def gh_pr_checks(pr: str, repo: str = "") -> str:
-    """show CI check status for a PR. always safe."""
+    """show CI check status for a PR. gh:read — always safe."""
     return _wrap(gh.pr_checks, pr=pr, repo=repo)
+
+
+@mcp.tool()
+def gh_pr_review_threads(pr: str, repo: str = "") -> str:
+    """list inline review comment threads with file, line, diff context and replies. gh:read — always safe."""
+    return _wrap(gh.pr_review_threads, pr=pr, repo=repo)
 
 
 # ===========================================================================
@@ -380,8 +398,35 @@ def gh_pr_review(
     repo: str = "",
     repo_path: str = ".",
 ) -> str:
-    """submit a PR review. event: 'approve', 'request-changes', 'comment'. ask before running."""
+    """submit a simple PR review (approve/request-changes/comment). ask before running."""
     return _wrap(gh.pr_review, pr=pr, event=event, body=body, repo=repo, repo_path=repo_path)
+
+
+@mcp.tool()
+def gh_pr_add_review(
+    pr: str,
+    event: str,
+    body: str = "",
+    inline_comments: list[dict] | None = None,
+    repo: str = "",
+) -> str:
+    """submit a PR review with inline line-level comments via GitHub API. ask before running.
+
+    event: 'APPROVE', 'REQUEST_CHANGES', or 'COMMENT'.
+    inline_comments: list of {path, line, body, side?} dicts for line-level feedback.
+    use this when you need to attach comments to specific lines of the diff.
+    """
+    return _wrap(gh.pr_add_review, pr=pr, event=event, body=body,
+                 inline_comments=inline_comments, repo=repo)
+
+
+@mcp.tool()
+def gh_pr_reply_comment(pr: str, comment_id: int, body: str, repo: str = "") -> str:
+    """reply to an inline review comment thread. ask before running.
+
+    comment_id: from gh_pr_review_threads output.
+    """
+    return _wrap(gh.pr_reply_comment, pr=pr, comment_id=comment_id, body=body, repo=repo)
 
 
 @mcp.tool()
@@ -525,8 +570,23 @@ def gh_run_list(
 
 @mcp.tool()
 def gh_run_view(run_id: str, repo: str = "", log: bool = False, repo_path: str = ".") -> str:
-    """view a workflow run's details or logs. log=True fetches full logs. always safe."""
+    """view a workflow run's overall status and jobs. log=True fetches raw step logs. gh:read — always safe."""
     return _wrap(gh.run_view, run_id=run_id, repo=repo, log=log, repo_path=repo_path)
+
+
+@mcp.tool()
+def gh_run_job_view(
+    run_id: str,
+    job_name: str = "",
+    repo: str = "",
+    log: bool = False,
+    repo_path: str = ".",
+) -> str:
+    """view details or step logs for a specific job within a run. gh:read — always safe.
+
+    job_name: partial name match (from gh_run_view output). log=True fetches step-by-step logs.
+    """
+    return _wrap(gh.run_job_view, run_id=run_id, job_name=job_name, repo=repo, log=log, repo_path=repo_path)
 
 
 @mcp.tool()
@@ -536,8 +596,42 @@ def gh_run_rerun(
     repo: str = "",
     repo_path: str = ".",
 ) -> str:
-    """rerun a workflow run. failed_only=True reruns only failed jobs. ask before running."""
+    """rerun a workflow run. failed_only=True reruns only failed jobs. gh:write — ask before running."""
     return _wrap(gh.run_rerun, run_id=run_id, failed_only=failed_only, repo=repo, repo_path=repo_path)
+
+
+@mcp.tool()
+def gh_run_cancel(run_id: str, repo: str = "", repo_path: str = ".") -> str:
+    """cancel an in-progress workflow run. gh:write — ask before running."""
+    return _wrap(gh.run_cancel, run_id=run_id, repo=repo, repo_path=repo_path)
+
+
+# ===========================================================================
+# GitHub: Workflows
+# ===========================================================================
+
+@mcp.tool()
+def gh_workflow_list(repo: str = "", repo_path: str = ".") -> str:
+    """list all workflows in the repository with their state and file path. gh:read — always safe."""
+    return _wrap(gh.workflow_list, repo=repo, repo_path=repo_path)
+
+
+@mcp.tool()
+def gh_workflow_run(
+    workflow: str,
+    ref: str = "",
+    inputs: dict[str, str] | None = None,
+    repo: str = "",
+    repo_path: str = ".",
+) -> str:
+    """trigger a workflow_dispatch event to run a workflow. gh:write — ask before running.
+
+    workflow: filename, name, or id (e.g. 'ci.yml').
+    ref: branch/tag to run on (default: repo default branch).
+    inputs: workflow input key=value pairs.
+    """
+    return _wrap(gh.workflow_run, workflow=workflow, ref=ref, inputs=inputs,
+                 repo=repo, repo_path=repo_path)
 
 
 # ===========================================================================

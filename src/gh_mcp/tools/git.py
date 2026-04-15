@@ -1,16 +1,32 @@
 """git tools — all git_* MCP tool implementations.
 
-permission levels (for Claude Code settings):
-  always-allow: git_status, git_diff, git_log, git_show, git_blame,
-                git_branch_list, git_remote_list, git_stash_list,
-                git_worktree_list, git_tag_list
-  always-allow: git_add, git_commit, git_branch_create, git_checkout,
-                git_stash_push, git_stash_pop, git_init
-  ask:          git_push, git_pull, git_fetch, git_clone, git_merge,
-                git_rebase, git_cherry_pick, git_worktree_add,
-                git_worktree_remove, git_remote_add, git_tag_create
-  ask:          git_reset, git_restore, git_clean, git_branch_delete,
-                git_push_force
+permission tiers (for Claude Code settings.json):
+
+  git:read          — always-allow (no side-effects)
+                      git_status, git_diff, git_log, git_show, git_blame,
+                      git_branch_list, git_remote_list, git_stash_list,
+                      git_worktree_list, git_tag_list
+
+  git:local-write   — always-allow (local only, no network, reversible)
+                      git_add, git_commit, git_branch_create, git_checkout,
+                      git_stash_push, git_stash_pop, git_init
+
+  git:remote-read   — always-allow or ask (network, read-only effect on local)
+                      git_fetch, git_pull, git_clone
+
+  git:remote-write  — ask (writes to remote)
+                      git_push, git_remote_add, git_tag_create
+
+  git:integrate     — ask (rewrites local history / topology)
+                      git_merge, git_rebase, git_rebase_abort,
+                      git_rebase_continue, git_cherry_pick,
+                      git_worktree_add, git_worktree_remove
+
+  git:local-destructive — ask (discards local work, no network)
+                      git_reset, git_restore, git_clean, git_branch_delete
+
+  git:remote-destructive — ask/block (rewrites remote history)
+                      git_push_force
 """
 
 from ..run import CommandError, _validate_path, _validate_ref, format_result, run, run_ok
@@ -204,7 +220,48 @@ def init(path: str, initial_branch: str = "main") -> str:
 
 
 # ---------------------------------------------------------------------------
-# remote / network — ask before running
+# git:remote-read — always-allow or ask (network, read-only effect locally)
+# ---------------------------------------------------------------------------
+
+def fetch(repo_path: str = ".", remote: str = "origin", prune: bool = True) -> str:
+    """fetch from remote without merging (git fetch). git:remote-read — safe to always-allow."""
+    args = ["git", "fetch", _validate_ref(remote, "remote")]
+    if prune:
+        args.append("--prune")
+    return format_result(run(args, cwd=repo_path), "git fetch")
+
+
+def pull(
+    repo_path: str = ".",
+    remote: str = "origin",
+    branch: str = "",
+    rebase: bool = False,
+) -> str:
+    """pull commits from remote (git pull). git:remote-read — safe to always-allow."""
+    args = ["git", "pull", _validate_ref(remote, "remote")]
+    if branch:
+        args.append(_validate_ref(branch, "branch"))
+    if rebase:
+        args.append("--rebase")
+    return format_result(run(args, cwd=repo_path), "git pull")
+
+
+def clone(url: str, destination: str = "", branch: str = "", depth: int = 0) -> str:
+    """clone a remote repository (git clone). git:remote-read."""
+    if any(c in url for c in '\x00|;&`$(){}[]<>\\! \t\n'):
+        raise CommandError(f"invalid clone URL: {url!r}")
+    args = ["git", "clone", url]
+    if destination:
+        args.append(_validate_path(destination))
+    if branch:
+        args.extend(["-b", _validate_ref(branch, "branch")])
+    if depth > 0:
+        args.extend(["--depth", str(depth)])
+    return format_result(run(args), "git clone")
+
+
+# ---------------------------------------------------------------------------
+# git:remote-write — ask (writes to remote)
 # ---------------------------------------------------------------------------
 
 def push(
@@ -214,9 +271,8 @@ def push(
     set_upstream: bool = False,
     tags: bool = False,
 ) -> str:
-    """push commits to remote (git push).
+    """push commits to remote (git push). git:remote-write — ask before running.
 
-    Requires network access and writes to the remote.
     branch: local branch to push (default: current branch).
     set_upstream: set tracking (-u flag).
     tags: push all tags.
@@ -231,16 +287,19 @@ def push(
     return format_result(run(args, cwd=repo_path), "git push")
 
 
+# ---------------------------------------------------------------------------
+# git:remote-destructive — ask or block (rewrites remote history)
+# ---------------------------------------------------------------------------
+
 def push_force(
     repo_path: str = ".",
     remote: str = "origin",
     branch: str = "",
     with_lease: bool = True,
 ) -> str:
-    """force-push to remote — DESTRUCTIVE (git push --force[-with-lease]).
+    """force-push to remote — rewrites remote history. git:remote-destructive — ask/block.
 
-    with_lease: use --force-with-lease (safer, default True).
-    Only use when you know remote history will be rewritten.
+    with_lease: use --force-with-lease (safer, refuses if remote has diverged — default True).
     """
     args = ["git", "push", _validate_ref(remote, "remote")]
     if branch:
@@ -249,45 +308,12 @@ def push_force(
     return format_result(run(args, cwd=repo_path), "git push --force")
 
 
-def pull(
-    repo_path: str = ".",
-    remote: str = "origin",
-    branch: str = "",
-    rebase: bool = False,
-) -> str:
-    """pull commits from remote (git pull)."""
-    args = ["git", "pull", _validate_ref(remote, "remote")]
-    if branch:
-        args.append(_validate_ref(branch, "branch"))
-    if rebase:
-        args.append("--rebase")
-    return format_result(run(args, cwd=repo_path), "git pull")
-
-
-def fetch(repo_path: str = ".", remote: str = "origin", prune: bool = True) -> str:
-    """fetch from remote without merging (git fetch)."""
-    args = ["git", "fetch", _validate_ref(remote, "remote")]
-    if prune:
-        args.append("--prune")
-    return format_result(run(args, cwd=repo_path), "git fetch")
-
-
-def clone(url: str, destination: str = "", branch: str = "", depth: int = 0) -> str:
-    """clone a remote repository (git clone)."""
-    if any(c in url for c in '\x00|;&`$(){}[]<>\\! \t\n'):
-        raise CommandError(f"invalid clone URL: {url!r}")
-    args = ["git", "clone", url]
-    if destination:
-        args.append(_validate_path(destination))
-    if branch:
-        args.extend(["-b", _validate_ref(branch, "branch")])
-    if depth > 0:
-        args.extend(["--depth", str(depth)])
-    return format_result(run(args), "git clone")
-
+# ---------------------------------------------------------------------------
+# git:integrate — ask (rewrites local history / topology)
+# ---------------------------------------------------------------------------
 
 def merge(repo_path: str, branch: str, no_ff: bool = False, squash: bool = False) -> str:
-    """merge a branch into current HEAD (git merge)."""
+    """merge a branch into current HEAD (git merge). git:integrate."""
     args = ["git", "merge", _validate_ref(branch, "branch")]
     if no_ff:
         args.append("--no-ff")
@@ -366,14 +392,13 @@ def worktree_remove(repo_path: str, path: str, force: bool = False) -> str:
 
 
 # ---------------------------------------------------------------------------
-# destructive — ask before running
+# git:local-destructive — ask (discards local work, no network)
 # ---------------------------------------------------------------------------
 
 def reset(repo_path: str, ref: str = "HEAD", mode: str = "mixed") -> str:
-    """reset HEAD to a ref — can discard commits (git reset).
+    """reset HEAD to a ref. mode='hard' discards all uncommitted changes. git:local-destructive.
 
     mode: 'soft' (keep staged), 'mixed' (unstage, keep files), 'hard' (discard all).
-    CAUTION: hard mode permanently discards uncommitted changes.
     """
     if mode not in ("soft", "mixed", "hard"):
         raise CommandError(f"mode must be 'soft', 'mixed', or 'hard', got {mode!r}")

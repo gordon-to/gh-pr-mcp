@@ -53,15 +53,18 @@ tests/
 
 Match tool names in Claude Code's `settings.json` permissions:
 
-| Level | Tool names | Suggested permission |
-|-------|-----------|---------------------|
-| Read-only git | `git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`, `git_branch_list`, `git_remote_list`, `git_stash_list`, `git_worktree_list`, `git_tag_list` | `allow` |
-| Local git writes | `git_add`, `git_commit`, `git_branch_create`, `git_checkout`, `git_stash_push`, `git_stash_pop`, `git_init` | `allow` |
-| Remote git | `git_push`, `git_pull`, `git_fetch`, `git_clone`, `git_merge`, `git_rebase`, `git_cherry_pick`, `git_worktree_add`, `git_worktree_remove`, `git_remote_add`, `git_tag_create` | `ask` |
-| Destructive git | `git_reset`, `git_restore`, `git_clean`, `git_branch_delete`, `git_push_force`, `git_rebase_abort`, `git_rebase_continue` | `ask` |
-| GitHub read | `gh_pr_list`, `gh_pr_view`, `gh_pr_diff`, `gh_pr_checks`, `gh_issue_list`, `gh_issue_view`, `gh_run_list`, `gh_run_view`, `gh_repo_view`, `gh_release_list`, `gh_release_view` | `allow` |
-| GitHub write | `gh_pr_create`, `gh_pr_comment`, `gh_pr_review`, `gh_pr_checkout`, `gh_issue_create`, `gh_issue_comment`, `gh_issue_close`, `gh_issue_edit`, `gh_run_rerun` | `ask` |
-| GitHub merge/create | `gh_pr_merge`, `gh_pr_close`, `gh_repo_create`, `gh_release_create` | `ask` |
+| Tier | Tool names | Suggested permission |
+|------|-----------|---------------------|
+| `git:read` | `git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`, `git_branch_list`, `git_remote_list`, `git_stash_list`, `git_worktree_list`, `git_tag_list` | `allow` |
+| `git:local-write` | `git_add`, `git_commit`, `git_branch_create`, `git_checkout`, `git_stash_push`, `git_stash_pop`, `git_init` | `allow` |
+| `git:remote-read` | `git_fetch`, `git_pull`, `git_clone` | `allow` |
+| `git:remote-write` | `git_push`, `git_remote_add`, `git_tag_create` | `ask` |
+| `git:integrate` | `git_merge`, `git_rebase`, `git_rebase_abort`, `git_rebase_continue`, `git_cherry_pick`, `git_worktree_add`, `git_worktree_remove` | `ask` |
+| `git:local-destructive` | `git_reset`, `git_restore`, `git_clean`, `git_branch_delete` | `ask` |
+| `git:remote-destructive` | `git_push_force` | `ask` / `block` |
+| `gh:read` | `gh_pr_list`, `gh_pr_view`, `gh_pr_diff`, `gh_pr_checks`, `gh_pr_review_threads`, `gh_issue_list`, `gh_issue_view`, `gh_run_list`, `gh_run_view`, `gh_run_job_view`, `gh_workflow_list`, `gh_repo_view`, `gh_release_list`, `gh_release_view` | `allow` |
+| `gh:write` | `gh_pr_create`, `gh_pr_comment`, `gh_pr_review`, `gh_pr_add_review`, `gh_pr_reply_comment`, `gh_pr_checkout`, `gh_issue_create`, `gh_issue_comment`, `gh_issue_close`, `gh_issue_edit`, `gh_run_rerun`, `gh_run_cancel`, `gh_workflow_run` | `ask` |
+| `gh:merge` | `gh_pr_merge`, `gh_pr_close`, `gh_repo_create`, `gh_release_create` | `ask` |
 
 ## Adding a new tool
 

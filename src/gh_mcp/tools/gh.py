@@ -1,18 +1,27 @@
 """gh (GitHub CLI) tools — all gh_* MCP tool implementations.
 
-permission levels:
-  always-allow: gh_pr_list, gh_pr_view, gh_pr_diff, gh_pr_checks,
-                gh_issue_list, gh_issue_view,
-                gh_run_list, gh_run_view,
-                gh_repo_view, gh_release_list, gh_release_view
-  ask:          gh_pr_create, gh_pr_comment, gh_pr_review, gh_pr_checkout,
-                gh_issue_create, gh_issue_comment, gh_issue_close, gh_issue_edit,
-                gh_run_rerun
-  ask:          gh_pr_merge, gh_pr_close, gh_repo_create,
-                gh_release_create
+permission tiers:
+  gh:read        — always-allow
+                   gh_pr_list, gh_pr_view, gh_pr_diff, gh_pr_checks,
+                   gh_pr_review_threads,
+                   gh_issue_list, gh_issue_view,
+                   gh_run_list, gh_run_view, gh_run_job_view,
+                   gh_workflow_list,
+                   gh_repo_view, gh_release_list, gh_release_view
+
+  gh:write       — ask (creates/updates content, reversible)
+                   gh_pr_create, gh_pr_comment, gh_pr_review, gh_pr_add_review,
+                   gh_pr_reply_comment, gh_pr_checkout,
+                   gh_issue_create, gh_issue_comment, gh_issue_close, gh_issue_edit,
+                   gh_run_rerun, gh_run_cancel, gh_workflow_run
+
+  gh:merge       — ask (merges/destroys, harder to undo)
+                   gh_pr_merge, gh_pr_close, gh_repo_create,
+                   gh_release_create
 """
 
 import json
+import subprocess
 
 from ..run import CommandError, _validate_ref, format_result, run, run_ok
 
@@ -22,6 +31,41 @@ def _repo_args(repo: str) -> list[str]:
     if repo:
         return ["-R", repo]
     return []
+
+
+def _api_repo(repo: str) -> str:
+    """repo path component for gh api URLs.
+
+    if repo is 'owner/repo' use it literally; otherwise use gh's {owner}/{repo}
+    placeholder which resolves from the current git remote.
+    """
+    return repo if repo else "{owner}/{repo}"
+
+
+def _gh_api_get(endpoint: str, paginate: bool = False) -> str:
+    """GET from the GitHub REST API via gh api."""
+    args = ["gh", "api", "--method", "GET"]
+    if paginate:
+        args.append("--paginate")
+    args.append(endpoint)
+    result = subprocess.run(args, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise CommandError(f"gh api GET failed: {(result.stderr or result.stdout).strip()}")
+    return result.stdout
+
+
+def _gh_api_post(endpoint: str, payload: dict) -> str:
+    """POST JSON to the GitHub REST API via gh api --input."""
+    args = ["gh", "api", "--method", "POST", endpoint, "--input", "-"]
+    result = subprocess.run(
+        args,
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise CommandError(f"gh api POST failed: {(result.stderr or result.stdout).strip()}")
+    return result.stdout
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +160,47 @@ def pr_checks(pr: str | int, repo: str = "") -> str:
     return format_result(run_ok(args), f"gh pr checks {pr}")
 
 
+def pr_review_threads(pr: str | int, repo: str = "") -> str:
+    """list inline review comment threads on a PR — file, line, diff context, and replies.
+
+    uses gh api directly since 'gh pr view' omits inline/line-level comments.
+    returns threads grouped by root comment, showing path, line, diff_hunk, and all replies.
+    """
+    endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/comments?per_page=100"
+    raw = _gh_api_get(endpoint, paginate=True)
+    try:
+        comments = json.loads(raw)
+        if not comments:
+            return "no inline review comments"
+
+        # group into threads: root comments + their replies
+        roots: dict[int, dict] = {}
+        replies: dict[int, list[dict]] = {}
+        for c in comments:
+            parent_id = c.get("in_reply_to_id")
+            if parent_id:
+                replies.setdefault(parent_id, []).append(c)
+            else:
+                roots[c["id"]] = c
+
+        lines = []
+        for cid, c in roots.items():
+            hunk = c.get("diff_hunk", "").strip()
+            lines.append(
+                f"Thread #{cid} — {c['path']}:{c.get('line') or c.get('original_line', '?')} "
+                f"({c.get('side', 'RIGHT')})"
+            )
+            if hunk:
+                lines.append(f"  diff: {hunk.splitlines()[-1] if hunk.splitlines() else hunk}")
+            lines.append(f"  {c['user']['login']}: {c['body']}")
+            for r in replies.get(cid, []):
+                lines.append(f"    ↳ {r['user']['login']} (#{r['id']}): {r['body']}")
+            lines.append("")
+        return "\n".join(lines).strip()
+    except (json.JSONDecodeError, KeyError) as e:
+        return format_result(raw, f"gh api pr/{pr}/comments (parse error: {e})")
+
+
 # ---------------------------------------------------------------------------
 # PR — write
 # ---------------------------------------------------------------------------
@@ -182,6 +267,71 @@ def pr_review(
     if body:
         args += ["--body", body]
     return format_result(run(args, cwd=repo_path), f"gh pr review {pr}")
+
+
+def pr_add_review(
+    pr: str | int,
+    event: str,
+    body: str = "",
+    inline_comments: list[dict] | None = None,
+    repo: str = "",
+) -> str:
+    """submit a PR review with optional inline comments via the GitHub API.
+
+    event: 'APPROVE', 'REQUEST_CHANGES', or 'COMMENT'.
+    body: top-level review body.
+    inline_comments: list of dicts, each with:
+        path (str)     — relative file path
+        line (int)     — line number in the new file
+        body (str)     — comment text
+        side (str)     — 'RIGHT' (default) or 'LEFT'
+
+    use this instead of pr_review when you need to attach comments to
+    specific lines of the diff.
+    """
+    event_upper = event.upper()
+    if event_upper not in ("APPROVE", "REQUEST_CHANGES", "COMMENT"):
+        raise CommandError(f"event must be APPROVE, REQUEST_CHANGES, or COMMENT, got {event!r}")
+    payload: dict = {"event": event_upper, "body": body, "comments": []}
+    for c in (inline_comments or []):
+        if not isinstance(c, dict) or "path" not in c or "line" not in c or "body" not in c:
+            raise CommandError("each inline_comment needs 'path', 'line', and 'body' keys")
+        payload["comments"].append({
+            "path": c["path"],
+            "line": int(c["line"]),
+            "body": c["body"],
+            "side": c.get("side", "RIGHT"),
+        })
+    endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/reviews"
+    raw = _gh_api_post(endpoint, payload)
+    try:
+        d = json.loads(raw)
+        return f"review #{d['id']} submitted: {d['state']} by {d['user']['login']}"
+    except (json.JSONDecodeError, KeyError):
+        return format_result(raw, f"gh api POST pr/{pr}/reviews")
+
+
+def pr_reply_comment(
+    pr: str | int,
+    comment_id: int,
+    body: str,
+    repo: str = "",
+) -> str:
+    """reply to an existing inline review comment thread.
+
+    comment_id: the id of the root comment to reply to (from pr_review_threads).
+    body: your reply text.
+    """
+    if not body.strip():
+        raise CommandError("reply body must not be empty")
+    endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/comments"
+    payload = {"body": body, "in_reply_to": comment_id}
+    raw = _gh_api_post(endpoint, payload)
+    try:
+        d = json.loads(raw)
+        return f"comment #{d['id']} posted by {d['user']['login']}: {d['body'][:100]}"
+    except (json.JSONDecodeError, KeyError):
+        return format_result(raw, f"gh api POST pr/{pr}/comments (reply)")
 
 
 def pr_checkout(pr: str | int, repo: str = "", repo_path: str = ".") -> str:
@@ -461,11 +611,97 @@ def run_view(run_id: str | int, repo: str = "", log: bool = False, repo_path: st
 
 
 def run_rerun(run_id: str | int, failed_only: bool = True, repo: str = "", repo_path: str = ".") -> str:
-    """rerun a workflow run (gh run rerun)."""
+    """rerun a workflow run (gh run rerun). gh:write."""
     args = ["gh", "run", "rerun", str(run_id)] + _repo_args(repo)
     if failed_only:
         args.append("--failed")
     return format_result(run(args, cwd=repo_path), f"gh run rerun {run_id}")
+
+
+def run_cancel(run_id: str | int, repo: str = "", repo_path: str = ".") -> str:
+    """cancel an in-progress workflow run (gh run cancel). gh:write."""
+    args = ["gh", "run", "cancel", str(run_id)] + _repo_args(repo)
+    return format_result(run(args, cwd=repo_path), f"gh run cancel {run_id}")
+
+
+def run_job_view(
+    run_id: str | int,
+    job_name: str = "",
+    repo: str = "",
+    log: bool = False,
+    repo_path: str = ".",
+) -> str:
+    """view details or logs for a specific job within a run (gh run view --job).
+
+    job_name: partial match for the job name shown in run_view output.
+    log: fetch full step-by-step logs for the job.
+    """
+    args = ["gh", "run", "view", str(run_id)] + _repo_args(repo)
+    if job_name:
+        args += ["--job", job_name]
+    if log:
+        args.append("--log")
+    else:
+        args += ["--json", "jobs"]
+    raw = run_ok(args, cwd=repo_path)
+    if log or job_name:
+        return format_result(raw, f"gh run view {run_id} --job {job_name}")
+    try:
+        d = json.loads(raw)
+        jobs = d.get("jobs", [])
+        if not jobs:
+            return "no jobs found"
+        lines = []
+        for job in jobs:
+            lines.append(f"{job['name']}: {job.get('conclusion') or job.get('status')}")
+            for step in job.get("steps", []):
+                lines.append(f"  [{step.get('conclusion') or step.get('status', '?'):8}] {step['name']}")
+        return "\n".join(lines)
+    except (json.JSONDecodeError, KeyError):
+        return format_result(raw, f"gh run view {run_id}")
+
+
+# ---------------------------------------------------------------------------
+# Workflows
+# ---------------------------------------------------------------------------
+
+def workflow_list(repo: str = "", repo_path: str = ".") -> str:
+    """list available workflows in the repository (gh workflow list). gh:read."""
+    args = ["gh", "workflow", "list", "--json", "id,name,state,path"] + _repo_args(repo)
+    raw = run_ok(args, cwd=repo_path)
+    try:
+        workflows = json.loads(raw)
+        if not workflows:
+            return "no workflows found"
+        lines = []
+        for w in workflows:
+            lines.append(f"{w['name']}  [{w['state']}]\n  id: {w['id']}  path: {w['path']}")
+        return "\n\n".join(lines)
+    except (json.JSONDecodeError, KeyError):
+        return format_result(raw, "gh workflow list")
+
+
+def workflow_run(
+    workflow: str,
+    ref: str = "",
+    inputs: dict[str, str] | None = None,
+    repo: str = "",
+    repo_path: str = ".",
+) -> str:
+    """trigger a workflow_dispatch event (gh workflow run). gh:write.
+
+    workflow: workflow name, id, or filename (e.g. 'ci.yml').
+    ref: branch or tag to run on (default: repo default branch).
+    inputs: dict of workflow input key=value pairs.
+    """
+    if not workflow.strip():
+        raise CommandError("workflow must not be empty")
+    args = ["gh", "workflow", "run", workflow] + _repo_args(repo)
+    if ref:
+        args += ["--ref", _validate_ref(ref, "ref")]
+    for k, v in (inputs or {}).items():
+        args += ["-f", f"{k}={v}"]
+    return format_result(run(args, cwd=repo_path), f"gh workflow run {workflow}")
 
 
 # ---------------------------------------------------------------------------
