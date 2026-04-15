@@ -469,43 +469,153 @@ def test_release_create_draft():
 # pr_review_threads
 # ---------------------------------------------------------------------------
 
-def test_pr_review_threads_groups_by_root():
+def _make_comment(
+    cid: int,
+    login: str,
+    body: str,
+    path: str = "src/foo.py",
+    line: int = 42,
+    position: int | None = 5,
+    user_type: str = "User",
+    in_reply_to_id: int | None = None,
+) -> dict:
+    return {
+        "id": cid,
+        "user": {"login": login, "type": user_type},
+        "body": body,
+        "path": path,
+        "line": line,
+        "original_line": line,
+        "position": position,
+        "in_reply_to_id": in_reply_to_id,
+    }
+
+
+def test_pr_review_threads_groups_replies_under_root():
     comments = [
-        {
-            "id": 10, "user": {"login": "alice"}, "body": "why not use X here?",
-            "path": "src/foo.py", "line": 42, "original_line": 42,
-            "side": "RIGHT", "diff_hunk": "@@ -40,6 +40,7 @@\n+    result = compute()",
-            "in_reply_to_id": None,
-        },
-        {
-            "id": 11, "user": {"login": "bob"}, "body": "good point, will fix",
-            "path": "src/foo.py", "line": 42, "original_line": 42,
-            "side": "RIGHT", "diff_hunk": "",
-            "in_reply_to_id": 10,
-        },
+        _make_comment(10, "alice", "why not use X?"),
+        _make_comment(11, "bob", "good point", in_reply_to_id=10),
     ]
     with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
         result = pr_review_threads("5")
-    assert "Thread #10" in result
-    assert "src/foo.py:42" in result
-    assert "alice" in result
-    assert "bob" in result
-    assert "↳" in result  # reply indicator
+    data = json.loads(result)
+    assert len(data["threads"]) == 1
+    thread = data["threads"][0]
+    assert thread["thread_id"] == 10
+    assert thread["file"] == "src/foo.py"
+    assert thread["line"] == 42
+    assert thread["author"]["login"] == "alice"
+    assert len(thread["replies"]) == 1
+    assert thread["replies"][0]["author"]["login"] == "bob"
 
 
-def test_pr_review_threads_empty():
+def test_pr_review_threads_outdated_when_position_null():
+    comments = [
+        _make_comment(20, "carol", "old comment", position=None),
+        _make_comment(21, "dan", "current comment", position=3),
+    ]
+    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
+        result = pr_review_threads("5")
+    data = json.loads(result)
+    threads = {t["thread_id"]: t for t in data["threads"]}
+    assert threads[20]["outdated"] is True
+    assert threads[21]["outdated"] is False
+    assert data["summary"]["outdated"] == 1
+    assert data["summary"]["active"] == 1
+
+
+def test_pr_review_threads_bot_detection():
+    comments = [
+        _make_comment(30, "claude-bot", "automated feedback", user_type="Bot"),
+        _make_comment(31, "alice", "human feedback", user_type="User"),
+    ]
+    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
+        result = pr_review_threads("5")
+    data = json.loads(result)
+    threads = {t["thread_id"]: t for t in data["threads"]}
+    assert threads[30]["author"]["type"] == "bot"
+    assert threads[31]["author"]["type"] == "human"
+    assert data["summary"]["bot"] == 1
+    assert data["summary"]["human"] == 1
+
+
+def test_pr_review_threads_filter_bot():
+    comments = [
+        _make_comment(40, "bot-reviewer", "style issue", user_type="Bot"),
+        _make_comment(41, "alice", "logic issue", user_type="User"),
+    ]
+    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
+        result = pr_review_threads("5", kind="bot")
+    data = json.loads(result)
+    assert len(data["threads"]) == 1
+    assert data["threads"][0]["author"]["type"] == "bot"
+
+
+def test_pr_review_threads_filter_human():
+    comments = [
+        _make_comment(50, "bot-reviewer", "style issue", user_type="Bot"),
+        _make_comment(51, "alice", "logic issue", user_type="User"),
+    ]
+    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
+        result = pr_review_threads("5", kind="human")
+    data = json.loads(result)
+    assert len(data["threads"]) == 1
+    assert data["threads"][0]["author"]["login"] == "alice"
+
+
+def test_pr_review_threads_filter_outdated():
+    comments = [
+        _make_comment(60, "alice", "old", position=None),
+        _make_comment(61, "alice", "current", position=2),
+    ]
+    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
+        result = pr_review_threads("5", kind="outdated")
+    data = json.loads(result)
+    assert len(data["threads"]) == 1
+    assert data["threads"][0]["outdated"] is True
+
+
+def test_pr_review_threads_filter_active():
+    comments = [
+        _make_comment(70, "alice", "old", position=None),
+        _make_comment(71, "alice", "current", position=2),
+    ]
+    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
+        result = pr_review_threads("5", kind="active")
+    data = json.loads(result)
+    assert len(data["threads"]) == 1
+    assert data["threads"][0]["outdated"] is False
+
+
+def test_pr_review_threads_invalid_kind_raises():
+    with patch("subprocess.run", return_value=_mock_run(stdout="[]")):
+        with pytest.raises(CommandError):
+            pr_review_threads("5", kind="nonsense")
+
+
+def test_pr_review_threads_empty_returns_json():
     with patch("subprocess.run", return_value=_mock_run(stdout="[]")):
         result = pr_review_threads("5")
-    assert "no inline" in result
+    data = json.loads(result)
+    assert data["threads"] == []
+    assert data["summary"]["total"] == 0
 
 
 def test_pr_review_threads_uses_api_endpoint():
     with patch("subprocess.run", return_value=_mock_run(stdout="[]")) as mock:
         pr_review_threads("7")
     cmd = mock.call_args[0][0]
-    assert "gh" in cmd
     assert "api" in cmd
     assert "pulls/7/comments" in " ".join(cmd)
+
+
+def test_pr_review_threads_thread_id_usable_for_reply():
+    """thread_id should be a plain int matching comment_id for pr_reply_comment."""
+    comments = [_make_comment(99, "alice", "needs work")]
+    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
+        result = pr_review_threads("5")
+    data = json.loads(result)
+    assert data["threads"][0]["thread_id"] == 99
 
 
 # ---------------------------------------------------------------------------
