@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "gh-mcp"
 version = "0.1.0"
 description = "MCP server wrapping git and gh into structured, permission-controlled tools"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "mcp[cli]>=1.6.0",
 ]
