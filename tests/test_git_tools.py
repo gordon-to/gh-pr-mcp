@@ -119,6 +119,40 @@ def test_log_n_limit(git_repo):
     assert len(lines) == 3
 
 
+def test_log_base_range(git_repo):
+    """base..HEAD shows only commits on the branch, not the base."""
+    base_sha = log(str(git_repo), n=1).split()[0]
+
+    branch_create(str(git_repo), name="feat", checkout=True)
+    for i in range(3):
+        (Path(git_repo) / f"feat{i}.txt").write_text(f"{i}\n")
+        add(str(git_repo), [f"feat{i}.txt"])
+        commit(str(git_repo), f"feat commit {i}")
+
+    result = log(str(git_repo), base=base_sha)
+    lines = [l for l in result.splitlines() if l.strip()]
+    assert len(lines) == 3
+    assert all("feat commit" in l for l in lines)
+
+
+def test_log_base_branch_range(git_repo):
+    """base..branch works when branch is explicitly named."""
+    branch_create(str(git_repo), name="feat", checkout=True)
+    (Path(git_repo) / "x.txt").write_text("x\n")
+    add(str(git_repo), ["x.txt"])
+    commit(str(git_repo), "feat: add x")
+
+    checkout(str(git_repo), "main")
+    result = log(str(git_repo), base="main", branch="feat")
+    assert "feat: add x" in result
+
+
+def test_log_graph(git_repo):
+    """graph flag produces graph decoration characters."""
+    result = log(str(git_repo), graph=True)
+    assert "*" in result
+
+
 # ---------------------------------------------------------------------------
 # show
 # ---------------------------------------------------------------------------
