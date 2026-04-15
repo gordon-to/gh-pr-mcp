@@ -14,11 +14,14 @@ An MCP (Model Context Protocol) server that exposes `git` and `gh` (GitHub CLI) 
 |----------|----------|-----------------|
 | **Git: read** | `git_status`, `git_diff`, `git_log`, `git_branch_list` | Always allow |
 | **Git: local write** | `git_add`, `git_commit`, `git_branch_create`, `git_stash_push` | Always allow |
-| **Git: remote** | `git_push`, `git_pull`, `git_fetch` | Ask |
-| **Git: destructive** | `git_reset`, `git_restore`, `git_clean`, `git_push_force` | Ask |
-| **GitHub: read** | `gh_pr_list`, `gh_issue_list`, `gh_run_list`, `gh_repo_view` | Always allow |
-| **GitHub: write** | `gh_pr_create`, `gh_issue_create`, `gh_pr_comment` | Ask |
-| **GitHub: merge/destroy** | `gh_pr_merge`, `gh_pr_close`, `gh_repo_create` | Ask |
+| `git:remote-read` | `git_fetch`, `git_pull`, `git_clone` | Always allow |
+| `git:remote-write` | `git_push`, `git_remote_add`, `git_tag_create` | Ask |
+| `git:integrate` | `git_merge`, `git_rebase`, `git_cherry_pick`, `git_worktree_add` | Ask |
+| `git:local-destructive` | `git_reset`, `git_restore`, `git_clean`, `git_branch_delete` | Ask |
+| `git:remote-destructive` | `git_push_force` | Ask / Block |
+| `gh:read` | `gh_pr_list`, `gh_pr_view`, `gh_pr_review_threads`, `gh_run_list`, `gh_run_job_view`, `gh_workflow_list` | Always allow |
+| `gh:write` | `gh_pr_create`, `gh_pr_add_review`, `gh_pr_reply_comment`, `gh_run_rerun`, `gh_workflow_run` | Ask |
+| `gh:merge` | `gh_pr_merge`, `gh_pr_close`, `gh_repo_create`, `gh_release_create` | Ask |
 
 ## Development
 

@@ -1,0 +1,396 @@
+"""tests for git tools."""
+
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from gh_mcp.tools.git import (
+    add,
+    blame,
+    branch_create,
+    branch_delete,
+    branch_list,
+    checkout,
+    clean,
+    commit,
+    diff,
+    fetch,
+    log,
+    merge,
+    pull,
+    push,
+    remote_add,
+    remote_list,
+    reset,
+    restore,
+    show,
+    stash_list,
+    stash_pop,
+    stash_push,
+    status,
+    tag_create,
+    tag_list,
+    worktree_add,
+    worktree_list,
+    worktree_remove,
+)
+
+# push/pull/fetch are tested with a local bare repo acting as remote (see test_push_pull_fetch)
+from gh_mcp.run import CommandError
+
+
+# ---------------------------------------------------------------------------
+# status
+# ---------------------------------------------------------------------------
+
+def test_status_clean_repo(git_repo):
+    result = status(str(git_repo))
+    assert "nothing to commit" in result or "clean" in result
+
+
+def test_status_with_changes(git_repo_with_changes):
+    result = status(str(git_repo_with_changes))
+    assert "staged.txt" in result
+    assert "unstaged.txt" in result
+
+
+# ---------------------------------------------------------------------------
+# diff
+# ---------------------------------------------------------------------------
+
+def test_diff_empty_on_clean_repo(git_repo):
+    result = diff(str(git_repo))
+    assert result == "(no output) from `git diff`"
+
+
+def test_diff_shows_unstaged_changes(git_repo):
+    (Path(git_repo) / "file.txt").write_text("hello\n")
+    subprocess.run(["git", "add", "file.txt"], cwd=git_repo, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "add file"],
+        cwd=git_repo, capture_output=True,
+    )
+    (Path(git_repo) / "file.txt").write_text("hello world\n")
+    result = diff(str(git_repo))
+    assert "hello world" in result or "+hello world" in result or "hello" in result
+
+
+def test_diff_staged(git_repo_with_changes):
+    result = diff(str(git_repo_with_changes), staged=True)
+    assert "staged" in result
+
+
+def test_diff_invalid_ref_raises(git_repo):
+    with pytest.raises(CommandError):
+        diff(str(git_repo), commit="bad;ref")
+
+
+# ---------------------------------------------------------------------------
+# log
+# ---------------------------------------------------------------------------
+
+def test_log_shows_commits(git_repo):
+    result = log(str(git_repo))
+    assert "initial commit" in result
+
+
+def test_log_oneline(git_repo):
+    result = log(str(git_repo), oneline=True)
+    # oneline format: hash message — no newlines within entry
+    lines = [l for l in result.splitlines() if l.strip()]
+    assert len(lines) >= 1
+    assert "initial commit" in lines[0]
+
+
+def test_log_n_limit(git_repo):
+    for i in range(5):
+        (Path(git_repo) / f"f{i}.txt").write_text(f"{i}\n")
+        subprocess.run(["git", "add", f"f{i}.txt"], cwd=git_repo, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", f"commit {i}"],
+            cwd=git_repo, capture_output=True,
+        )
+    result = log(str(git_repo), n=3)
+    lines = [l for l in result.splitlines() if l.strip()]
+    assert len(lines) == 3
+
+
+# ---------------------------------------------------------------------------
+# show
+# ---------------------------------------------------------------------------
+
+def test_show_head(git_repo):
+    result = show(str(git_repo), ref="HEAD")
+    assert "initial commit" in result
+
+
+# ---------------------------------------------------------------------------
+# blame
+# ---------------------------------------------------------------------------
+
+def test_blame_file(git_repo):
+    result = blame(str(git_repo), path="README.md")
+    assert "test repo" in result or "README" in result
+
+
+# ---------------------------------------------------------------------------
+# add + commit
+# ---------------------------------------------------------------------------
+
+def test_add_and_commit(git_repo):
+    (Path(git_repo) / "new.txt").write_text("content\n")
+    add(str(git_repo), ["new.txt"])
+    result = commit(str(git_repo), message="add new.txt")
+    assert "new.txt" in result or "add new.txt" in result or "master" in result or "main" in result
+
+
+def test_add_invalid_path_raises(git_repo):
+    with pytest.raises(CommandError):
+        add(str(git_repo), ["bad|path"])
+
+
+def test_commit_empty_message_raises(git_repo):
+    with pytest.raises(CommandError):
+        commit(str(git_repo), message="   ")
+
+
+def test_commit_nothing_staged_raises(git_repo):
+    with pytest.raises(CommandError):
+        commit(str(git_repo), message="should fail")
+
+
+# ---------------------------------------------------------------------------
+# branch operations
+# ---------------------------------------------------------------------------
+
+def test_branch_list(git_repo):
+    result = branch_list(str(git_repo))
+    assert "main" in result
+
+
+def test_branch_create_and_checkout(git_repo):
+    branch_create(str(git_repo), name="feature/test", checkout=True)
+    result = branch_list(str(git_repo))
+    assert "feature/test" in result
+
+
+def test_branch_create_invalid_name_raises(git_repo):
+    with pytest.raises(CommandError):
+        branch_create(str(git_repo), name="bad;name")
+
+
+def test_branch_delete(git_repo):
+    branch_create(str(git_repo), name="to-delete", checkout=False)
+    branch_delete(str(git_repo), name="to-delete")
+    result = branch_list(str(git_repo))
+    assert "to-delete" not in result
+
+
+def test_branch_delete_unmerged_requires_force(git_repo):
+    branch_create(str(git_repo), name="unmerged", checkout=True)
+    (Path(git_repo) / "extra.txt").write_text("extra\n")
+    add(str(git_repo), ["extra.txt"])
+    commit(str(git_repo), "extra commit")
+    checkout(str(git_repo), "main")
+    with pytest.raises(CommandError):
+        branch_delete(str(git_repo), name="unmerged", force=False)
+
+
+# ---------------------------------------------------------------------------
+# checkout
+# ---------------------------------------------------------------------------
+
+def test_checkout_existing_branch(git_repo):
+    branch_create(str(git_repo), name="other", checkout=False)
+    checkout(str(git_repo), "other")
+    result = branch_list(str(git_repo))
+    assert "* other" in result or "other" in result
+
+
+def test_checkout_invalid_ref_raises(git_repo):
+    with pytest.raises(CommandError):
+        checkout(str(git_repo), "nonexistent-branch-xyz")
+
+
+# ---------------------------------------------------------------------------
+# stash
+# ---------------------------------------------------------------------------
+
+def test_stash_push_and_pop(git_repo):
+    (Path(git_repo) / "stashed.txt").write_text("will be stashed\n")
+    stash_push(str(git_repo), message="test stash")
+    lst = stash_list(str(git_repo))
+    assert "test stash" in lst
+    stash_pop(str(git_repo))
+    assert (Path(git_repo) / "stashed.txt").exists()
+
+
+def test_stash_list_empty(git_repo):
+    result = stash_list(str(git_repo))
+    assert "(no output)" in result
+
+
+# ---------------------------------------------------------------------------
+# remote
+# ---------------------------------------------------------------------------
+
+def test_remote_list_empty(git_repo):
+    result = remote_list(str(git_repo))
+    assert "(no output)" in result
+
+
+def test_remote_add(git_repo, tmp_path):
+    other = tmp_path / "other"
+    other.mkdir()
+    subprocess.run(["git", "init", str(other)], capture_output=True)
+    remote_add(str(git_repo), name="upstream", url=str(other))
+    result = remote_list(str(git_repo))
+    assert "upstream" in result
+
+
+# ---------------------------------------------------------------------------
+# tags
+# ---------------------------------------------------------------------------
+
+def test_tag_create_and_list(git_repo):
+    tag_create(str(git_repo), name="v1.0.0")
+    result = tag_list(str(git_repo))
+    assert "v1.0.0" in result
+
+
+def test_tag_create_annotated(git_repo):
+    tag_create(str(git_repo), name="v2.0.0", message="release v2")
+    result = tag_list(str(git_repo))
+    assert "v2.0.0" in result
+
+
+# ---------------------------------------------------------------------------
+# worktrees
+# ---------------------------------------------------------------------------
+
+def test_worktree_add_and_list_and_remove(git_repo, tmp_path):
+    wt_path = str(tmp_path / "worktree1")
+    worktree_add(str(git_repo), path=wt_path, branch="wt-branch", create_branch=True)
+    result = worktree_list(str(git_repo))
+    assert wt_path in result
+    worktree_remove(str(git_repo), path=wt_path)
+    result2 = worktree_list(str(git_repo))
+    assert wt_path not in result2
+
+
+# ---------------------------------------------------------------------------
+# reset and restore
+# ---------------------------------------------------------------------------
+
+def test_reset_soft(git_repo):
+    (Path(git_repo) / "r.txt").write_text("r\n")
+    add(str(git_repo), ["r.txt"])
+    commit(str(git_repo), "add r")
+    reset(str(git_repo), ref="HEAD~1", mode="soft")
+    result = status(str(git_repo))
+    assert "r.txt" in result
+
+
+def test_reset_hard_removes_changes(git_repo):
+    (Path(git_repo) / "h.txt").write_text("h\n")
+    add(str(git_repo), ["h.txt"])
+    commit(str(git_repo), "add h")
+    reset(str(git_repo), ref="HEAD~1", mode="hard")
+    assert not (Path(git_repo) / "h.txt").exists()
+
+
+def test_reset_invalid_mode_raises(git_repo):
+    with pytest.raises(CommandError):
+        reset(str(git_repo), mode="invalid")
+
+
+def test_restore_discards_changes(git_repo):
+    readme = Path(git_repo) / "README.md"
+    original = readme.read_text()
+    readme.write_text("modified\n")
+    restore(str(git_repo), paths=["README.md"])
+    assert readme.read_text() == original
+
+
+# ---------------------------------------------------------------------------
+# clean
+# ---------------------------------------------------------------------------
+
+def test_clean_dry_run(git_repo):
+    (Path(git_repo) / "untracked.txt").write_text("untracked\n")
+    result = clean(str(git_repo), dry_run=True)
+    assert "untracked.txt" in result
+
+
+def test_clean_removes_files(git_repo):
+    (Path(git_repo) / "toclean.txt").write_text("clean me\n")
+    clean(str(git_repo), force=True)
+    assert not (Path(git_repo) / "toclean.txt").exists()
+
+
+# ---------------------------------------------------------------------------
+# merge
+# ---------------------------------------------------------------------------
+
+def test_merge_branch(git_repo):
+    branch_create(str(git_repo), name="feature", checkout=True)
+    (Path(git_repo) / "feature.txt").write_text("feature\n")
+    add(str(git_repo), ["feature.txt"])
+    commit(str(git_repo), "add feature")
+    checkout(str(git_repo), "main")
+    result = merge(str(git_repo), branch="feature")
+    assert "feature" in result or "Already up to date" in result or "Merge" in result or "Fast-forward" in result
+
+
+# ---------------------------------------------------------------------------
+# push / pull / fetch (uses a local bare repo as remote)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def git_repo_with_remote(git_repo: Path, tmp_path: Path):
+    """repo with a local bare clone acting as 'origin'."""
+    bare = tmp_path / "bare.git"
+    subprocess.run(
+        ["git", "clone", "--bare", str(git_repo), str(bare)],
+        check=True, capture_output=True,
+    )
+    remote_add(str(git_repo), name="origin", url=str(bare))
+    return git_repo, bare
+
+
+def test_push_and_fetch(git_repo_with_remote):
+    repo, bare = git_repo_with_remote
+    (repo / "pushed.txt").write_text("pushed\n")
+    add(str(repo), ["pushed.txt"])
+    commit(str(repo), "add pushed")
+    push(str(repo), remote="origin", branch="main")
+
+    clone_dir = repo.parent / "clone2"
+    subprocess.run(
+        ["git", "clone", str(bare), str(clone_dir)],
+        check=True, capture_output=True,
+    )
+    assert (clone_dir / "pushed.txt").exists()
+
+
+def test_pull_updates_repo(git_repo_with_remote, tmp_path):
+    repo, bare = git_repo_with_remote
+    # push a commit from a second clone to the bare remote
+    clone2 = tmp_path / "clone2"
+    subprocess.run(["git", "clone", str(bare), str(clone2)], check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=clone2, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "T"], cwd=clone2, capture_output=True)
+    (clone2 / "from_clone2.txt").write_text("from clone2\n")
+    subprocess.run(["git", "add", "from_clone2.txt"], cwd=clone2, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "from clone2"], cwd=clone2, capture_output=True)
+    subprocess.run(["git", "push"], cwd=clone2, capture_output=True)
+
+    # pull into the original repo
+    pull(str(repo), remote="origin", branch="main")
+    assert (repo / "from_clone2.txt").exists()
+
+
+def test_fetch_nonexistent_remote_fails(git_repo):
+    with pytest.raises(CommandError):
+        fetch(str(git_repo), remote="nonexistent")

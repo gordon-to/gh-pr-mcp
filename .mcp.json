@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "gh-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "/Users/ag/projects/gh-mcp-dev", "gh-mcp"],
+      "description": "git + GitHub CLI tools (dev worktree — latest changes)"
+    }
+  }
+}
