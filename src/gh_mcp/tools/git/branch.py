@@ -3,9 +3,13 @@ from ...run import _validate_ref, format_result, run, run_ok
 
 
 @tool("git")
-def branch_list(repo_path: str = ".", all_branches: bool = False) -> str:
-    """list branches (git branch -v[a])."""
-    args = ["git", "branch", "-v"]
+def branch_list(repo_path: str = ".", all_branches: bool = False, verbose: bool = False) -> str:
+    """list branches (git branch -v[v][a]).
+
+    verbose: show upstream tracking branch and ahead/behind status (-vv).
+    all_branches: include remote-tracking branches.
+    """
+    args = ["git", "branch", "-vv" if verbose else "-v"]
     if all_branches:
         args.append("-a")
     return format_result(run_ok(args, cwd=repo_path), "git branch")

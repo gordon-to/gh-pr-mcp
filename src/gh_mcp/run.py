@@ -1,5 +1,6 @@
 """subprocess helpers and input validation."""
 
+import os
 import re
 import subprocess
 
@@ -9,6 +10,17 @@ import subprocess
 # value itself won't be interpreted. we still block the worst offenders.
 _REF_PATTERN = re.compile(r'^[a-zA-Z0-9._/\-~^@:{}\[\]]+$')
 _PATH_PATTERN = re.compile(r'^[a-zA-Z0-9._/\- ]+$')
+
+# this server is always non-interactive (stdio MCP). prevent git/gh from
+# opening editors or prompting for credentials — both hang indefinitely.
+_ENV = {
+    **os.environ,
+    "GIT_EDITOR": "true",
+    "GIT_SEQUENCE_EDITOR": "true",
+    "GIT_TERMINAL_PROMPT": "0",
+    "GIT_PAGER": "cat",
+    "GH_PROMPT_DISABLED": "1",
+}
 
 
 class CommandError(Exception):
@@ -38,6 +50,7 @@ def run(args: list[str], cwd: str | None = None) -> str:
         cwd=cwd or ".",
         capture_output=True,
         text=True,
+        env=_ENV,
     )
     if result.returncode != 0:
         stderr = result.stderr.strip()
@@ -54,6 +67,7 @@ def run_ok(args: list[str], cwd: str | None = None) -> str:
         cwd=cwd or ".",
         capture_output=True,
         text=True,
+        env=_ENV,
     )
     return (result.stdout + result.stderr).strip()
 
