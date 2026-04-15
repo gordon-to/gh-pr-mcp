@@ -1,7 +1,9 @@
+from ...app import tool
 from ...run import CommandError, format_result, run
 from ._api import _repo_args
 
 
+@tool("gh")
 def pr_comment(pr: str | int, body: str, repo: str = "", repo_path: str = ".") -> str:
     """add a comment to a pull request (gh pr comment)."""
     if not body.strip():

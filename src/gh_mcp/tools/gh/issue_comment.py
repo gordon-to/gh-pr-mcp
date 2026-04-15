@@ -1,7 +1,9 @@
+from ...app import tool
 from ...run import CommandError, format_result, run
 from ._api import _repo_args
 
 
+@tool("gh")
 def issue_comment(issue: str | int, body: str, repo: str = "", repo_path: str = ".") -> str:
     """add a comment to an issue (gh issue comment)."""
     if not body.strip():

@@ -1,6 +1,8 @@
+from ...app import tool
 from ...run import _validate_ref, format_result, run, run_ok
 
 
+@tool("git")
 def branch_list(repo_path: str = ".", all_branches: bool = False) -> str:
     """list branches (git branch -v[a])."""
     args = ["git", "branch", "-v"]
@@ -9,6 +11,7 @@ def branch_list(repo_path: str = ".", all_branches: bool = False) -> str:
     return format_result(run_ok(args, cwd=repo_path), "git branch")
 
 
+@tool("git")
 def branch_create(repo_path: str, name: str, start_point: str = "", checkout: bool = True) -> str:
     """create a branch (git switch -c / git branch).
 
@@ -26,6 +29,7 @@ def branch_create(repo_path: str, name: str, start_point: str = "", checkout: bo
     return format_result(run(args, cwd=repo_path), f"git branch create {name}")
 
 
+@tool("git")
 def branch_delete(repo_path: str, name: str, force: bool = False, remote: str = "") -> str:
     """delete a branch (git branch -d / git push --delete).
 
@@ -41,6 +45,7 @@ def branch_delete(repo_path: str, name: str, force: bool = False, remote: str = 
     return format_result(out, f"git branch delete {name}")
 
 
+@tool("git")
 def checkout(repo_path: str, ref: str) -> str:
     """switch to a branch or commit (git switch / git checkout).
 

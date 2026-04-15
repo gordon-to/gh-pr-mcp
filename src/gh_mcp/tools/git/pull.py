@@ -1,6 +1,8 @@
+from ...app import tool
 from ...run import _validate_ref, format_result, run
 
 
+@tool("git")
 def pull(
     repo_path: str = ".",
     remote: str = "origin",

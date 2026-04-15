@@ -1,9 +1,11 @@
 import json
 
+from ...app import tool
 from ...run import format_result, run_ok
 from ._api import _repo_args
 
 
+@tool("gh")
 def repo_view(repo: str = "") -> str:
     """view repository info (gh repo view)."""
     args = ["gh", "repo", "view", "--json",

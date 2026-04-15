@@ -1,6 +1,8 @@
+from ...app import tool
 from ...run import _validate_ref, format_result, run
 
 
+@tool("git")
 def push(
     repo_path: str = ".",
     remote: str = "origin",
@@ -24,6 +26,7 @@ def push(
     return format_result(run(args, cwd=repo_path), "git push")
 
 
+@tool("git")
 def push_force(
     repo_path: str = ".",
     remote: str = "origin",

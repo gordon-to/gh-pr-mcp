@@ -1,6 +1,8 @@
+from ...app import tool
 from ...run import CommandError, _validate_ref, format_result, run
 
 
+@tool("git")
 def cherry_pick(repo_path: str, commits: list[str]) -> str:
     """apply commits onto current HEAD (git cherry-pick)."""
     if not commits:

@@ -1,9 +1,11 @@
 import json
 
+from ...app import tool
 from ...run import format_result, run_ok
 from ._api import _repo_args
 
 
+@tool("gh")
 def release_list(repo: str = "", limit: int = 20) -> str:
     """list releases (gh release list)."""
     args = ["gh", "release", "list", "--limit", str(limit), "--json",
@@ -31,6 +33,7 @@ def release_list(repo: str = "", limit: int = 20) -> str:
         return format_result(raw, "gh release list")
 
 
+@tool("gh")
 def release_view(tag: str, repo: str = "") -> str:
     """view release details (gh release view)."""
     args = ["gh", "release", "view", tag, "--json",

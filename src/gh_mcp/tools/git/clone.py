@@ -1,6 +1,8 @@
+from ...app import tool
 from ...run import CommandError, _validate_path, _validate_ref, format_result, run
 
 
+@tool("git")
 def clone(url: str, destination: str = "", branch: str = "", depth: int = 0) -> str:
     """clone a remote repository (git clone). git:remote-read."""
     if any(c in url for c in '\x00|;&`$(){}[]<>\\! \t\n'):

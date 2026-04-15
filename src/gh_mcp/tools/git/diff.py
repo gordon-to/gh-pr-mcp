@@ -1,6 +1,8 @@
+from ...app import tool
 from ...run import _validate_path, _validate_ref, format_result, run_ok
 
 
+@tool("git")
 def diff(
     repo_path: str = ".",
     staged: bool = False,

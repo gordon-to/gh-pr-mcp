@@ -1,6 +1,8 @@
+from ...app import tool
 from ...run import CommandError, format_result, run
 
 
+@tool("git")
 def clean(repo_path: str, directories: bool = False, force: bool = True, dry_run: bool = False) -> str:
     """remove untracked files — DESTRUCTIVE (git clean).
 

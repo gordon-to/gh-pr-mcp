@@ -1,7 +1,9 @@
+from ...app import tool
 from ...run import format_result, run
 from ._api import _repo_args
 
 
+@tool("gh")
 def issue_edit(
     issue: str | int,
     title: str = "",

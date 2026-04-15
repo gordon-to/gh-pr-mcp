@@ -1,9 +1,11 @@
 import json
 
+from ...app import tool
 from ...run import format_result, run_ok
 from ._api import _repo_args
 
 
+@tool("gh")
 def workflow_list(repo: str = "", repo_path: str = ".") -> str:
     """list available workflows in the repository (gh workflow list). gh:read."""
     args = ["gh", "workflow", "list", "--json", "id,name,state,path"] + _repo_args(repo)

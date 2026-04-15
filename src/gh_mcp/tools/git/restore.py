@@ -1,6 +1,8 @@
+from ...app import tool
 from ...run import CommandError, _validate_path, format_result, run
 
 
+@tool("git")
 def restore(repo_path: str, paths: list[str], staged: bool = False) -> str:
     """discard changes to files — DESTRUCTIVE (git restore).
 

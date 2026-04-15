@@ -1,6 +1,8 @@
+from ...app import tool
 from ...run import _validate_path, _validate_ref, format_result, run_ok
 
 
+@tool("git")
 def log(
     repo_path: str = ".",
     n: int = 20,
@@ -27,6 +29,7 @@ def log(
     return format_result(run_ok(args, cwd=repo_path), "git log")
 
 
+@tool("git")
 def show(repo_path: str = ".", ref: str = "HEAD", path: str = "") -> str:
     """show details of a commit (git show)."""
     args = ["git", "show", _validate_ref(ref)]
@@ -35,6 +38,7 @@ def show(repo_path: str = ".", ref: str = "HEAD", path: str = "") -> str:
     return format_result(run_ok(args, cwd=repo_path), f"git show {ref}")
 
 
+@tool("git")
 def blame(repo_path: str, path: str, ref: str = "HEAD") -> str:
     """show line-by-line authorship (git blame)."""
     args = ["git", "blame", _validate_ref(ref), "--", _validate_path(path)]

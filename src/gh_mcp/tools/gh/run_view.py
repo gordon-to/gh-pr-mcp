@@ -1,9 +1,11 @@
 import json
 
+from ...app import tool
 from ...run import format_result, run_ok
 from ._api import _repo_args
 
 
+@tool("gh")
 def run_view(run_id: str | int, repo: str = "", log: bool = False, repo_path: str = ".") -> str:
     """view a workflow run's details or logs (gh run view)."""
     args = ["gh", "run", "view", str(run_id)] + _repo_args(repo)
@@ -31,6 +33,7 @@ def run_view(run_id: str | int, repo: str = "", log: bool = False, repo_path: st
         return format_result(raw, f"gh run view {run_id}")
 
 
+@tool("gh")
 def run_job_view(
     run_id: str | int,
     job_name: str = "",

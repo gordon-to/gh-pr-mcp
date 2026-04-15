@@ -1,9 +1,11 @@
 import json
 
+from ...app import tool
 from ...run import format_result, run_ok
 from ._api import _api_repo, _gh_api_get, _repo_args
 
 
+@tool("gh")
 def pr_view(pr: str | int, repo: str = "") -> str:
     """view pull request details including description and comments (gh pr view).
 
@@ -42,18 +44,21 @@ def pr_view(pr: str | int, repo: str = "") -> str:
         return format_result(raw, f"gh pr view {pr}")
 
 
+@tool("gh")
 def pr_diff(pr: str | int, repo: str = "") -> str:
     """show the diff for a pull request (gh pr diff)."""
     args = ["gh", "pr", "diff", str(pr)] + _repo_args(repo)
     return format_result(run_ok(args), f"gh pr diff {pr}")
 
 
+@tool("gh")
 def pr_checks(pr: str | int, repo: str = "") -> str:
     """show CI check status for a pull request (gh pr checks)."""
     args = ["gh", "pr", "checks", str(pr)] + _repo_args(repo)
     return format_result(run_ok(args), f"gh pr checks {pr}")
 
 
+@tool("gh")
 def pr_review_threads(pr: str | int, repo: str = "") -> str:
     """list inline review comment threads on a PR — file, line, diff context, and replies.
 

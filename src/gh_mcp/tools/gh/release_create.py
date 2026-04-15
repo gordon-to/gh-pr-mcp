@@ -1,7 +1,9 @@
+from ...app import tool
 from ...run import _validate_ref, format_result, run
 from ._api import _repo_args
 
 
+@tool("gh")
 def release_create(
     tag: str,
     title: str = "",

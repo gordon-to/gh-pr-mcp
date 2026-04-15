@@ -1,9 +1,11 @@
 import json
 
+from ...app import tool
 from ...run import CommandError, format_result, run
 from ._api import _api_repo, _gh_api_post, _repo_args
 
 
+@tool("gh")
 def pr_review(
     pr: str | int,
     event: str,
@@ -24,6 +26,7 @@ def pr_review(
     return format_result(run(args, cwd=repo_path), f"gh pr review {pr}")
 
 
+@tool("gh")
 def pr_add_review(
     pr: str | int,
     event: str,
@@ -66,6 +69,7 @@ def pr_add_review(
         return format_result(raw, f"gh api POST pr/{pr}/reviews")
 
 
+@tool("gh")
 def pr_reply_comment(
     pr: str | int,
     comment_id: int,

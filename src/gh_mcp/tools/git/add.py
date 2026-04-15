@@ -1,7 +1,9 @@
+from ...app import tool
 from ...run import CommandError, _validate_path, run
 from .status import status
 
 
+@tool("git")
 def add(repo_path: str, paths: list[str]) -> str:
     """stage files (git add).
 

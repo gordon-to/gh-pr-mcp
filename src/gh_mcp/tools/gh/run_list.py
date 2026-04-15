@@ -1,9 +1,11 @@
 import json
 
+from ...app import tool
 from ...run import _validate_ref, format_result, run_ok
 from ._api import _repo_args
 
 
+@tool("gh")
 def run_list(
     repo: str = "",
     workflow: str = "",

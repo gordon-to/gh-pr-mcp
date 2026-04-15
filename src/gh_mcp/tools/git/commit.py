@@ -1,6 +1,8 @@
+from ...app import tool
 from ...run import CommandError, format_result, run
 
 
+@tool("git")
 def commit(repo_path: str, message: str, allow_empty: bool = False) -> str:
     """create a commit (git commit).
 

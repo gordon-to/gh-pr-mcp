@@ -1,6 +1,8 @@
+from ...app import tool
 from ...run import CommandError, format_result, run
 
 
+@tool("gh")
 def repo_create(
     name: str,
     private: bool = True,

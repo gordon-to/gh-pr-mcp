@@ -1,7 +1,9 @@
+from ...app import tool
 from ...run import CommandError, format_result, run
 from ._api import _repo_args
 
 
+@tool("gh")
 def pr_merge(
     pr: str | int,
     method: str = "merge",
@@ -22,6 +24,7 @@ def pr_merge(
     return format_result(run(args, cwd=repo_path), f"gh pr merge {pr}")
 
 
+@tool("gh")
 def pr_close(pr: str | int, comment: str = "", repo: str = "", repo_path: str = ".") -> str:
     """close a pull request without merging (gh pr close)."""
     args = ["gh", "pr", "close", str(pr)] + _repo_args(repo)

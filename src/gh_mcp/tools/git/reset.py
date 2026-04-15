@@ -1,6 +1,8 @@
+from ...app import tool
 from ...run import CommandError, _validate_ref, format_result, run
 
 
+@tool("git")
 def reset(repo_path: str, ref: str = "HEAD", mode: str = "mixed") -> str:
     """reset HEAD to a ref. mode='hard' discards all uncommitted changes. git:local-destructive.
 
