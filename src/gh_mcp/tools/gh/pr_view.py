@@ -1,8 +1,9 @@
 import json
+import subprocess
 
 from ...app import tool
 from ...run import CommandError, format_result, run_ok
-from ._api import _api_repo, _gh_api_get, _repo_args
+from ._api import _api_repo, _gh_api_get, _gh_api_graphql, _repo_args
 
 
 @tool("gh")
@@ -65,6 +66,61 @@ def _classify_author(user: dict) -> dict:
     }
 
 
+_THREADS_QUERY = """
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          comments(first: 1) { nodes { databaseId } }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+def _resolve_owner_name(repo: str) -> tuple[str, str]:
+    """return (owner, name). if repo is empty, query the current remote."""
+    if repo:
+        if "/" not in repo:
+            raise CommandError(f"repo must be 'owner/name', got {repo!r}")
+        owner, name = repo.split("/", 1)
+        return owner, name
+    result = subprocess.run(
+        ["gh", "repo", "view", "--json", "owner,name"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise CommandError(f"gh repo view failed: {(result.stderr or result.stdout).strip()}")
+    try:
+        d = json.loads(result.stdout)
+        return d["owner"]["login"], d["name"]
+    except (json.JSONDecodeError, KeyError) as e:
+        raise CommandError(f"could not parse gh repo view output: {e}") from e
+
+
+def _fetch_thread_meta(pr: int, repo: str) -> dict[int, dict]:
+    """map root-comment databaseId -> {resolve_id, resolved}."""
+    owner, name = _resolve_owner_name(repo)
+    data = _gh_api_graphql(_THREADS_QUERY, {"owner": owner, "name": name, "number": pr})
+    threads = (((data.get("repository") or {}).get("pullRequest") or {})
+               .get("reviewThreads") or {}).get("nodes") or []
+    out: dict[int, dict] = {}
+    for t in threads:
+        comments = ((t.get("comments") or {}).get("nodes")) or []
+        if not comments:
+            continue
+        db_id = comments[0].get("databaseId")
+        if db_id is None:
+            continue
+        out[int(db_id)] = {"resolve_id": t.get("id", ""), "resolved": bool(t.get("isResolved"))}
+    return out
+
+
 @tool("gh")
 def pr_review_threads(
     pr: str | int,
@@ -74,24 +130,31 @@ def pr_review_threads(
     """fetch inline review comment threads on a PR, structured for agent use.
 
     Returns JSON with a 'threads' list and a 'summary'. Each thread:
-      thread_id  — pass directly to gh_pr_reply_comment to reply
+      thread_id  — numeric comment id; pass to gh_pr_reply_comment to reply
+      resolve_id — GraphQL node id; pass to gh_pr_resolve_thread / gh_pr_unresolve_thread
+      resolved   — true if the thread has been marked resolved on GitHub
       file, line — where the comment was placed in the diff
       outdated   — true when the commented line no longer exists in the current diff
       author     — {login, type} where type is 'human' or 'bot'
       body       — root comment text
       replies    — [{id, author, body}] in chronological order
 
-    kind: filter results — 'bot', 'human', 'outdated', 'active'. Empty returns all.
+    kind: filter results — 'bot', 'human', 'outdated', 'active', 'resolved', 'unresolved'.
+          Empty returns all.
 
     typical workflow:
-      1. pr_review_threads(pr="5", kind="human")  → see what needs addressing
+      1. pr_review_threads(pr="5", kind="unresolved")  → see what still needs addressing
       2. pr_reply_comment(pr="5", comment_id=<thread_id>, body="fixed in abc123")
+      3. pr_resolve_thread(thread_id=<resolve_id>)
     """
-    if kind and kind not in ("bot", "human", "outdated", "active"):
-        raise CommandError(f"unknown kind {kind!r}: use 'bot', 'human', 'outdated', or 'active'")
+    if kind and kind not in ("bot", "human", "outdated", "active", "resolved", "unresolved"):
+        raise CommandError(
+            f"unknown kind {kind!r}: use 'bot', 'human', 'outdated', 'active', 'resolved', or 'unresolved'"
+        )
 
     endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/comments?per_page=100"
     comments: list[dict] = json.loads(_gh_api_get(endpoint))
+    thread_meta = _fetch_thread_meta(int(pr), repo)
 
     roots: dict[int, dict] = {}
     children: dict[int, list[dict]] = {}
@@ -108,8 +171,11 @@ def pr_review_threads(
     for cid, root in roots.items():
         # position is null when the line the comment was on is no longer in the diff
         outdated = root.get("position") is None
+        meta = thread_meta.get(cid, {})
         threads.append({
             "thread_id": cid,
+            "resolve_id": meta.get("resolve_id", ""),
+            "resolved": meta.get("resolved", False),
             "file": root.get("path", ""),
             "line": root.get("line") or root.get("original_line"),
             "outdated": outdated,
@@ -133,11 +199,17 @@ def pr_review_threads(
         threads = [t for t in threads if t["outdated"]]
     elif kind == "active":
         threads = [t for t in threads if not t["outdated"]]
+    elif kind == "resolved":
+        threads = [t for t in threads if t["resolved"]]
+    elif kind == "unresolved":
+        threads = [t for t in threads if not t["resolved"]]
 
     summary = {
         "total": len(threads),
         "active": sum(1 for t in threads if not t["outdated"]),
         "outdated": sum(1 for t in threads if t["outdated"]),
+        "resolved": sum(1 for t in threads if t["resolved"]),
+        "unresolved": sum(1 for t in threads if not t["resolved"]),
         "human": sum(1 for t in threads if t["author"]["type"] == "human"),
         "bot": sum(1 for t in threads if t["author"]["type"] == "bot"),
     }

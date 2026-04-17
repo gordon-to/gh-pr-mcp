@@ -10,6 +10,7 @@ from .pr_create import pr_create as pr_create
 from .pr_edit import pr_edit as pr_edit
 from .pr_list import pr_list as pr_list
 from .pr_merge import pr_close as pr_close, pr_merge as pr_merge
+from .pr_resolve_thread import pr_resolve_thread as pr_resolve_thread, pr_unresolve_thread as pr_unresolve_thread
 from .pr_review import pr_add_review as pr_add_review, pr_reply_comment as pr_reply_comment, pr_review as pr_review
 from .pr_view import pr_checks as pr_checks, pr_diff as pr_diff, pr_review_threads as pr_review_threads, pr_view as pr_view
 from .release_create import release_create as release_create
