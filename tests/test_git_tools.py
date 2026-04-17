@@ -20,6 +20,9 @@ from gh_mcp.tools.git import (
     merge,
     pull,
     push,
+    rebase,
+    rebase_abort,
+    rebase_continue,
     remote_add,
     remote_list,
     reset,
@@ -114,6 +117,40 @@ def test_log_n_limit(git_repo):
     result = log(str(git_repo), n=3)
     lines = [l for l in result.splitlines() if l.strip()]
     assert len(lines) == 3
+
+
+def test_log_base_range(git_repo):
+    """base..HEAD shows only commits on the branch, not the base."""
+    base_sha = log(str(git_repo), n=1).split()[0]
+
+    branch_create(str(git_repo), name="feat", checkout=True)
+    for i in range(3):
+        (Path(git_repo) / f"feat{i}.txt").write_text(f"{i}\n")
+        add(str(git_repo), [f"feat{i}.txt"])
+        commit(str(git_repo), f"feat commit {i}")
+
+    result = log(str(git_repo), base=base_sha)
+    lines = [l for l in result.splitlines() if l.strip()]
+    assert len(lines) == 3
+    assert all("feat commit" in l for l in lines)
+
+
+def test_log_base_branch_range(git_repo):
+    """base..branch works when branch is explicitly named."""
+    branch_create(str(git_repo), name="feat", checkout=True)
+    (Path(git_repo) / "x.txt").write_text("x\n")
+    add(str(git_repo), ["x.txt"])
+    commit(str(git_repo), "feat: add x")
+
+    checkout(str(git_repo), "main")
+    result = log(str(git_repo), base="main", branch="feat")
+    assert "feat: add x" in result
+
+
+def test_log_graph(git_repo):
+    """graph flag produces graph decoration characters."""
+    result = log(str(git_repo), graph=True)
+    assert "*" in result
 
 
 # ---------------------------------------------------------------------------
@@ -399,3 +436,79 @@ def test_pull_updates_repo(git_repo_with_remote, tmp_path):
 def test_fetch_nonexistent_remote_fails(git_repo):
     with pytest.raises(CommandError):
         fetch(str(git_repo), remote="nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# rebase — clean and conflict resolution
+# ---------------------------------------------------------------------------
+
+def test_rebase_no_conflict(git_repo):
+    """rebase onto a branch that doesn't conflict completes cleanly."""
+    branch_create(str(git_repo), name="feature", checkout=True)
+    (Path(git_repo) / "feature.txt").write_text("feature\n")
+    add(str(git_repo), ["feature.txt"])
+    commit(str(git_repo), "feature: add feature.txt")
+
+    checkout(str(git_repo), "main")
+    (Path(git_repo) / "other.txt").write_text("other\n")
+    add(str(git_repo), ["other.txt"])
+    commit(str(git_repo), "main: add other.txt")
+
+    checkout(str(git_repo), "feature")
+    result = rebase(str(git_repo), onto="main")
+    assert "Successfully rebased" in result or "is up to date" in result or "Fast-forwarded" in result
+
+
+def test_rebase_conflict_resolve_and_continue(git_repo):
+    """conflict resolution: git_add then rebase_continue must not hang or open an editor."""
+    # create conflicting edit on feature branch
+    branch_create(str(git_repo), name="feature", checkout=True)
+    readme = Path(git_repo) / "README.md"
+    readme.write_text("feature edit\n")
+    add(str(git_repo), ["README.md"])
+    commit(str(git_repo), "feature: edit README")
+
+    # create conflicting edit on main
+    checkout(str(git_repo), "main")
+    readme.write_text("main edit\n")
+    add(str(git_repo), ["README.md"])
+    commit(str(git_repo), "main: edit README")
+
+    # rebase feature onto main — expect conflict
+    checkout(str(git_repo), "feature")
+    with pytest.raises(CommandError):
+        rebase(str(git_repo), onto="main")
+
+    # resolve conflict
+    readme.write_text("resolved\n")
+    add(str(git_repo), ["README.md"])
+
+    # continue — must complete without opening an editor (GIT_EDITOR=true)
+    result = rebase_continue(str(git_repo))
+    assert "Successfully rebased" in result or "Applied" in result or "rebased" in result.lower()
+
+    # confirm feature is now ahead of main with the rebased commit
+    log_result = log(str(git_repo), n=3)
+    assert "feature: edit README" in log_result
+
+
+def test_rebase_abort(git_repo):
+    """rebase_abort restores the pre-rebase state."""
+    branch_create(str(git_repo), name="feature", checkout=True)
+    readme = Path(git_repo) / "README.md"
+    readme.write_text("feature\n")
+    add(str(git_repo), ["README.md"])
+    commit(str(git_repo), "feature: edit")
+
+    checkout(str(git_repo), "main")
+    readme.write_text("main\n")
+    add(str(git_repo), ["README.md"])
+    commit(str(git_repo), "main: edit")
+
+    checkout(str(git_repo), "feature")
+    with pytest.raises(CommandError):
+        rebase(str(git_repo), onto="main")
+
+    rebase_abort(str(git_repo))
+    # back on feature with original content
+    assert readme.read_text() == "feature\n"

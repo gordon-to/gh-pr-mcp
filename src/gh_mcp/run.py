@@ -57,7 +57,7 @@ def run(args: list[str], cwd: str | None = None) -> str:
         stdout = result.stdout.strip()
         detail = stderr or stdout or "(no output)"
         raise CommandError(f"command failed (exit {result.returncode}): {detail}")
-    return result.stdout
+    return (result.stdout + result.stderr).strip()
 
 
 def run_ok(args: list[str], cwd: str | None = None) -> str:
