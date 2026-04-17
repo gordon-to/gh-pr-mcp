@@ -7,6 +7,7 @@ from .issue_view import issue_view as issue_view
 from .pr_checkout import pr_checkout as pr_checkout
 from .pr_comment import pr_comment as pr_comment
 from .pr_create import pr_create as pr_create
+from .pr_edit import pr_edit as pr_edit
 from .pr_list import pr_list as pr_list
 from .pr_merge import pr_close as pr_close, pr_merge as pr_merge
 from .pr_review import pr_add_review as pr_add_review, pr_reply_comment as pr_reply_comment, pr_review as pr_review

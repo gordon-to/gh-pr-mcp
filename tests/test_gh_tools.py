@@ -22,6 +22,7 @@ from gh_mcp.tools.gh import (
     pr_close,
     pr_comment,
     pr_create,
+    pr_edit,
     pr_list,
     pr_merge,
     pr_reply_comment,
@@ -65,6 +66,8 @@ def test_pr_list_formats_output():
             "headRefName": "feat/thing",
             "updatedAt": "2024-01-15T10:00:00Z",
             "isDraft": False,
+            "mergeable": "MERGEABLE",
+            "mergeStateStatus": "CLEAN",
         }
     ]
     with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(prs))):
@@ -72,6 +75,8 @@ def test_pr_list_formats_output():
     assert "#1" in result
     assert "feat: add thing" in result
     assert "alice" in result
+    assert "mergeable: MERGEABLE" in result
+    assert "state: CLEAN" in result
 
 
 def test_pr_list_empty():
@@ -85,10 +90,35 @@ def test_pr_list_draft_shown():
         "number": 2, "title": "WIP", "author": {"login": "bob"},
         "state": "OPEN", "headRefName": "wip", "updatedAt": "2024-01-01T00:00:00Z",
         "isDraft": True,
+        "mergeable": "CONFLICTING", "mergeStateStatus": "DIRTY",
     }]
     with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(prs))):
         result = pr_list()
     assert "DRAFT" in result
+    assert "CONFLICTING" in result
+    assert "DIRTY" in result
+
+
+def test_pr_list_missing_mergeable_fields_falls_back_to_unknown():
+    prs = [{
+        "number": 3, "title": "x", "author": {"login": "carol"},
+        "state": "OPEN", "headRefName": "x", "updatedAt": "2024-01-01T00:00:00Z",
+        "isDraft": False,
+    }]
+    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(prs))):
+        result = pr_list()
+    assert "mergeable: UNKNOWN" in result
+    assert "state: UNKNOWN" in result
+
+
+def test_pr_list_requests_mergeable_json_fields():
+    with patch("subprocess.run", return_value=_mock_run(stdout="[]")) as mock:
+        pr_list()
+    cmd = mock.call_args[0][0]
+    json_idx = cmd.index("--json")
+    fields = cmd[json_idx + 1]
+    assert "mergeable" in fields
+    assert "mergeStateStatus" in fields
 
 
 def test_pr_list_passes_state_flag():
@@ -169,6 +199,61 @@ def test_pr_create_invalid_base_raises():
     with pytest.raises(CommandError):
         with patch("subprocess.run", return_value=_mock_run(stdout="url")):
             pr_create(base="bad|base")
+
+
+# ---------------------------------------------------------------------------
+# pr_edit
+# ---------------------------------------------------------------------------
+
+def test_pr_edit_passes_body():
+    with patch("subprocess.run", return_value=_mock_run(stdout="ok")) as mock:
+        pr_edit("7", body="new description")
+    cmd = mock.call_args[0][0]
+    assert cmd[:4] == ["gh", "pr", "edit", "7"]
+    assert "--body" in cmd
+    assert "new description" in cmd
+
+
+def test_pr_edit_passes_title_and_base():
+    with patch("subprocess.run", return_value=_mock_run(stdout="ok")) as mock:
+        pr_edit(8, title="new title", base="develop")
+    cmd = mock.call_args[0][0]
+    assert "--title" in cmd
+    assert "new title" in cmd
+    assert "--base" in cmd
+    assert "develop" in cmd
+
+
+def test_pr_edit_labels_and_reviewers():
+    with patch("subprocess.run", return_value=_mock_run(stdout="ok")) as mock:
+        pr_edit(
+            "9",
+            add_label=["bug", "p0"],
+            remove_label=["stale"],
+            add_reviewer=["alice"],
+            remove_reviewer=["bob"],
+        )
+    cmd = mock.call_args[0][0]
+    assert cmd.count("--add-label") == 2
+    assert "bug" in cmd and "p0" in cmd
+    assert "--remove-label" in cmd and "stale" in cmd
+    assert "--add-reviewer" in cmd and "alice" in cmd
+    assert "--remove-reviewer" in cmd and "bob" in cmd
+
+
+def test_pr_edit_omits_unset_fields():
+    with patch("subprocess.run", return_value=_mock_run(stdout="ok")) as mock:
+        pr_edit("10")
+    cmd = mock.call_args[0][0]
+    assert "--title" not in cmd
+    assert "--body" not in cmd
+    assert "--base" not in cmd
+
+
+def test_pr_edit_invalid_base_raises():
+    with pytest.raises(CommandError):
+        with patch("subprocess.run", return_value=_mock_run(stdout="ok")):
+            pr_edit("11", base="bad;base")
 
 
 # ---------------------------------------------------------------------------

@@ -19,7 +19,7 @@ def pr_list(
     state: 'open', 'closed', 'merged', or 'all'.
     """
     args = ["gh", "pr", "list", "--state", state, "--limit", str(limit), "--json",
-            "number,title,author,state,headRefName,updatedAt,isDraft"]
+            "number,title,author,state,headRefName,updatedAt,isDraft,mergeable,mergeStateStatus"]
     args += _repo_args(repo)
     if author:
         args += ["--author", author]
@@ -35,9 +35,12 @@ def pr_list(
         lines = []
         for pr in prs:
             draft = " [DRAFT]" if pr.get("isDraft") else ""
+            mergeable = pr.get("mergeable") or "UNKNOWN"
+            merge_state = pr.get("mergeStateStatus") or "UNKNOWN"
             lines.append(
                 f"#{pr['number']} {pr['title']}{draft}\n"
-                f"  branch: {pr['headRefName']}  author: {pr['author']['login']}  updated: {pr['updatedAt'][:10]}"
+                f"  branch: {pr['headRefName']}  author: {pr['author']['login']}  updated: {pr['updatedAt'][:10]}\n"
+                f"  mergeable: {mergeable}  state: {merge_state}"
             )
         return "\n\n".join(lines)
     except (json.JSONDecodeError, KeyError):
