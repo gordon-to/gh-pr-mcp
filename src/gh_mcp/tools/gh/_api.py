@@ -44,3 +44,28 @@ def _gh_api_post(endpoint: str, payload: dict) -> str:
     if result.returncode != 0:
         raise CommandError(f"gh api POST failed: {(result.stderr or result.stdout).strip()}")
     return result.stdout
+
+
+def _gh_api_graphql(query: str, variables: dict | None = None) -> dict:
+    """run a GraphQL query/mutation via gh api graphql. returns the 'data' object."""
+    payload = {"query": query, "variables": variables or {}}
+    args = ["gh", "api", "graphql", "--input", "-"]
+    result = subprocess.run(
+        args,
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise CommandError(f"gh api graphql failed: {(result.stderr or result.stdout).strip()}")
+    try:
+        body = json.loads(result.stdout)
+    except json.JSONDecodeError as e:
+        raise CommandError(f"gh api graphql returned non-JSON: {e}") from e
+    if errors := body.get("errors"):
+        msgs = "; ".join(e.get("message", str(e)) for e in errors)
+        raise CommandError(f"graphql errors: {msgs}")
+    data = body.get("data")
+    if data is None:
+        raise CommandError("graphql response missing 'data'")
+    return data

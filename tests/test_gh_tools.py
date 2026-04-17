@@ -26,8 +26,10 @@ from gh_mcp.tools.gh import (
     pr_list,
     pr_merge,
     pr_reply_comment,
+    pr_resolve_thread,
     pr_review,
     pr_review_threads,
+    pr_unresolve_thread,
     pr_view,
     release_create,
     release_list,
@@ -576,13 +578,33 @@ def _make_comment(
     }
 
 
+def _threads_side_effect(comments: list[dict], meta: dict | None = None) -> list:
+    """side_effect returning the REST-comments then the GraphQL-threads response.
+
+    meta maps root comment databaseId -> {"resolve_id": str, "resolved": bool}.
+    tests using this helper must pass repo="owner/name" to skip the repo-view call.
+    """
+    nodes = []
+    for cid, info in (meta or {}).items():
+        nodes.append({
+            "id": info.get("resolve_id", f"THREAD_{cid}"),
+            "isResolved": info.get("resolved", False),
+            "comments": {"nodes": [{"databaseId": cid}]},
+        })
+    graphql = {"data": {"repository": {"pullRequest": {"reviewThreads": {"nodes": nodes}}}}}
+    return [
+        _mock_run(stdout=json.dumps(comments)),
+        _mock_run(stdout=json.dumps(graphql)),
+    ]
+
+
 def test_pr_review_threads_groups_replies_under_root():
     comments = [
         _make_comment(10, "alice", "why not use X?"),
         _make_comment(11, "bob", "good point", in_reply_to_id=10),
     ]
-    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
-        result = pr_review_threads("5")
+    with patch("subprocess.run", side_effect=_threads_side_effect(comments)):
+        result = pr_review_threads("5", repo="o/r")
     data = json.loads(result)
     assert len(data["threads"]) == 1
     thread = data["threads"][0]
@@ -599,8 +621,8 @@ def test_pr_review_threads_outdated_when_position_null():
         _make_comment(20, "carol", "old comment", position=None),
         _make_comment(21, "dan", "current comment", position=3),
     ]
-    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
-        result = pr_review_threads("5")
+    with patch("subprocess.run", side_effect=_threads_side_effect(comments)):
+        result = pr_review_threads("5", repo="o/r")
     data = json.loads(result)
     threads = {t["thread_id"]: t for t in data["threads"]}
     assert threads[20]["outdated"] is True
@@ -614,8 +636,8 @@ def test_pr_review_threads_bot_detection():
         _make_comment(30, "claude-bot", "automated feedback", user_type="Bot"),
         _make_comment(31, "alice", "human feedback", user_type="User"),
     ]
-    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
-        result = pr_review_threads("5")
+    with patch("subprocess.run", side_effect=_threads_side_effect(comments)):
+        result = pr_review_threads("5", repo="o/r")
     data = json.loads(result)
     threads = {t["thread_id"]: t for t in data["threads"]}
     assert threads[30]["author"]["type"] == "bot"
@@ -629,8 +651,8 @@ def test_pr_review_threads_filter_bot():
         _make_comment(40, "bot-reviewer", "style issue", user_type="Bot"),
         _make_comment(41, "alice", "logic issue", user_type="User"),
     ]
-    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
-        result = pr_review_threads("5", kind="bot")
+    with patch("subprocess.run", side_effect=_threads_side_effect(comments)):
+        result = pr_review_threads("5", repo="o/r", kind="bot")
     data = json.loads(result)
     assert len(data["threads"]) == 1
     assert data["threads"][0]["author"]["type"] == "bot"
@@ -641,8 +663,8 @@ def test_pr_review_threads_filter_human():
         _make_comment(50, "bot-reviewer", "style issue", user_type="Bot"),
         _make_comment(51, "alice", "logic issue", user_type="User"),
     ]
-    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
-        result = pr_review_threads("5", kind="human")
+    with patch("subprocess.run", side_effect=_threads_side_effect(comments)):
+        result = pr_review_threads("5", repo="o/r", kind="human")
     data = json.loads(result)
     assert len(data["threads"]) == 1
     assert data["threads"][0]["author"]["login"] == "alice"
@@ -653,8 +675,8 @@ def test_pr_review_threads_filter_outdated():
         _make_comment(60, "alice", "old", position=None),
         _make_comment(61, "alice", "current", position=2),
     ]
-    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
-        result = pr_review_threads("5", kind="outdated")
+    with patch("subprocess.run", side_effect=_threads_side_effect(comments)):
+        result = pr_review_threads("5", repo="o/r", kind="outdated")
     data = json.loads(result)
     assert len(data["threads"]) == 1
     assert data["threads"][0]["outdated"] is True
@@ -665,31 +687,32 @@ def test_pr_review_threads_filter_active():
         _make_comment(70, "alice", "old", position=None),
         _make_comment(71, "alice", "current", position=2),
     ]
-    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
-        result = pr_review_threads("5", kind="active")
+    with patch("subprocess.run", side_effect=_threads_side_effect(comments)):
+        result = pr_review_threads("5", repo="o/r", kind="active")
     data = json.loads(result)
     assert len(data["threads"]) == 1
     assert data["threads"][0]["outdated"] is False
 
 
 def test_pr_review_threads_invalid_kind_raises():
-    with patch("subprocess.run", return_value=_mock_run(stdout="[]")):
+    with patch("subprocess.run", side_effect=_threads_side_effect([])):
         with pytest.raises(CommandError):
-            pr_review_threads("5", kind="nonsense")
+            pr_review_threads("5", repo="o/r", kind="nonsense")
 
 
 def test_pr_review_threads_empty_returns_json():
-    with patch("subprocess.run", return_value=_mock_run(stdout="[]")):
-        result = pr_review_threads("5")
+    with patch("subprocess.run", side_effect=_threads_side_effect([])):
+        result = pr_review_threads("5", repo="o/r")
     data = json.loads(result)
     assert data["threads"] == []
     assert data["summary"]["total"] == 0
 
 
 def test_pr_review_threads_uses_api_endpoint():
-    with patch("subprocess.run", return_value=_mock_run(stdout="[]")) as mock:
-        pr_review_threads("7")
-    cmd = mock.call_args[0][0]
+    with patch("subprocess.run", side_effect=_threads_side_effect([])) as mock:
+        pr_review_threads("7", repo="o/r")
+    # first call is the REST comments fetch
+    cmd = mock.call_args_list[0][0][0]
     assert "api" in cmd
     assert "pulls/7/comments" in " ".join(cmd)
 
@@ -697,10 +720,73 @@ def test_pr_review_threads_uses_api_endpoint():
 def test_pr_review_threads_thread_id_usable_for_reply():
     """thread_id should be a plain int matching comment_id for pr_reply_comment."""
     comments = [_make_comment(99, "alice", "needs work")]
-    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(comments))):
-        result = pr_review_threads("5")
+    with patch("subprocess.run", side_effect=_threads_side_effect(comments)):
+        result = pr_review_threads("5", repo="o/r")
     data = json.loads(result)
     assert data["threads"][0]["thread_id"] == 99
+
+
+def test_pr_review_threads_includes_resolve_id_and_resolved_state():
+    comments = [
+        _make_comment(200, "alice", "nit: rename"),
+        _make_comment(201, "alice", "refactor this"),
+    ]
+    meta = {
+        200: {"resolve_id": "PRRT_abc", "resolved": True},
+        201: {"resolve_id": "PRRT_xyz", "resolved": False},
+    }
+    with patch("subprocess.run", side_effect=_threads_side_effect(comments, meta)):
+        result = pr_review_threads("5", repo="o/r")
+    data = json.loads(result)
+    threads = {t["thread_id"]: t for t in data["threads"]}
+    assert threads[200]["resolve_id"] == "PRRT_abc"
+    assert threads[200]["resolved"] is True
+    assert threads[201]["resolve_id"] == "PRRT_xyz"
+    assert threads[201]["resolved"] is False
+    assert data["summary"]["resolved"] == 1
+    assert data["summary"]["unresolved"] == 1
+
+
+def test_pr_review_threads_filter_unresolved():
+    comments = [
+        _make_comment(300, "alice", "done"),
+        _make_comment(301, "alice", "still pending"),
+    ]
+    meta = {
+        300: {"resolve_id": "PRRT_a", "resolved": True},
+        301: {"resolve_id": "PRRT_b", "resolved": False},
+    }
+    with patch("subprocess.run", side_effect=_threads_side_effect(comments, meta)):
+        result = pr_review_threads("5", repo="o/r", kind="unresolved")
+    data = json.loads(result)
+    assert len(data["threads"]) == 1
+    assert data["threads"][0]["thread_id"] == 301
+
+
+def test_pr_review_threads_filter_resolved():
+    comments = [
+        _make_comment(400, "alice", "done"),
+        _make_comment(401, "alice", "still pending"),
+    ]
+    meta = {
+        400: {"resolve_id": "PRRT_a", "resolved": True},
+        401: {"resolve_id": "PRRT_b", "resolved": False},
+    }
+    with patch("subprocess.run", side_effect=_threads_side_effect(comments, meta)):
+        result = pr_review_threads("5", repo="o/r", kind="resolved")
+    data = json.loads(result)
+    assert len(data["threads"]) == 1
+    assert data["threads"][0]["thread_id"] == 400
+
+
+def test_pr_review_threads_missing_meta_defaults_to_empty():
+    """if GraphQL doesn't return a thread for a comment, resolve_id is '' and resolved is False."""
+    comments = [_make_comment(500, "alice", "orphan")]
+    with patch("subprocess.run", side_effect=_threads_side_effect(comments, meta=None)):
+        result = pr_review_threads("5", repo="o/r")
+    data = json.loads(result)
+    assert data["threads"][0]["resolve_id"] == ""
+    assert data["threads"][0]["resolved"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -875,3 +961,56 @@ def test_workflow_run_with_ref_and_inputs():
 def test_workflow_run_empty_name_raises():
     with pytest.raises(CommandError):
         workflow_run("  ")
+
+
+# ---------------------------------------------------------------------------
+# pr_resolve_thread / pr_unresolve_thread
+# ---------------------------------------------------------------------------
+
+def _graphql_response(mutation: str, thread_id: str, resolved: bool) -> str:
+    return json.dumps({"data": {mutation: {"thread": {"id": thread_id, "isResolved": resolved}}}})
+
+
+def test_pr_resolve_thread_calls_graphql_mutation():
+    response = _graphql_response("resolveReviewThread", "PRRT_abc", True)
+    with patch("subprocess.run", return_value=_mock_run(stdout=response)) as mock:
+        result = pr_resolve_thread("PRRT_abc")
+    cmd = mock.call_args[0][0]
+    assert cmd[:4] == ["gh", "api", "graphql", "--input"]
+    payload = json.loads(mock.call_args[1]["input"])
+    assert "resolveReviewThread" in payload["query"]
+    assert payload["variables"] == {"id": "PRRT_abc"}
+    assert "resolved=True" in result
+
+
+def test_pr_unresolve_thread_calls_graphql_mutation():
+    response = _graphql_response("unresolveReviewThread", "PRRT_xyz", False)
+    with patch("subprocess.run", return_value=_mock_run(stdout=response)) as mock:
+        result = pr_unresolve_thread("PRRT_xyz")
+    payload = json.loads(mock.call_args[1]["input"])
+    assert "unresolveReviewThread" in payload["query"]
+    assert payload["variables"] == {"id": "PRRT_xyz"}
+    assert "resolved=False" in result
+
+
+def test_pr_resolve_thread_empty_id_raises():
+    with pytest.raises(CommandError):
+        pr_resolve_thread("")
+
+
+def test_pr_unresolve_thread_empty_id_raises():
+    with pytest.raises(CommandError):
+        pr_unresolve_thread("   ")
+
+
+def test_pr_resolve_thread_surfaces_graphql_errors():
+    response = json.dumps({"data": None, "errors": [{"message": "thread not found"}]})
+    with patch("subprocess.run", return_value=_mock_run(stdout=response)):
+        with pytest.raises(CommandError, match="thread not found"):
+            pr_resolve_thread("PRRT_missing")
+
+
+def test_pr_resolve_thread_surfaces_nonzero_exit():
+    with patch("subprocess.run", return_value=_mock_run(returncode=1, stderr="HTTP 401")):
+        with pytest.raises(CommandError, match="HTTP 401"):
+            pr_resolve_thread("PRRT_abc")

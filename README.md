@@ -20,7 +20,7 @@ An MCP (Model Context Protocol) server that exposes `git` and `gh` (GitHub CLI) 
 | `git:local-destructive` | `git_reset`, `git_restore`, `git_clean`, `git_branch_delete` | Ask |
 | `git:remote-destructive` | `git_push_force` | Ask / Block |
 | `gh:read` | `gh_pr_list`, `gh_pr_view`, `gh_pr_review_threads`, `gh_run_list`, `gh_run_job_view`, `gh_workflow_list` | Always allow |
-| `gh:write` | `gh_pr_create`, `gh_pr_edit`, `gh_pr_add_review`, `gh_pr_reply_comment`, `gh_run_rerun`, `gh_workflow_run` | Ask |
+| `gh:write` | `gh_pr_create`, `gh_pr_edit`, `gh_pr_add_review`, `gh_pr_reply_comment`, `gh_pr_resolve_thread`, `gh_pr_unresolve_thread`, `gh_run_rerun`, `gh_workflow_run` | Ask |
 | `gh:merge` | `gh_pr_merge`, `gh_pr_close`, `gh_repo_create`, `gh_release_create` | Ask |
 
 ## Development

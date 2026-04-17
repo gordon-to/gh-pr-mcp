@@ -72,7 +72,7 @@ Match tool names in Claude Code's `settings.json` permissions:
 | `git:local-destructive` | `git_reset`, `git_restore`, `git_clean`, `git_branch_delete` | `ask` |
 | `git:remote-destructive` | `git_push_force` | `ask` / `block` |
 | `gh:read` | `gh_pr_list`, `gh_pr_view`, `gh_pr_diff`, `gh_pr_checks`, `gh_pr_review_threads`, `gh_issue_list`, `gh_issue_view`, `gh_run_list`, `gh_run_view`, `gh_run_job_view`, `gh_workflow_list`, `gh_repo_view`, `gh_release_list`, `gh_release_view` | `allow` |
-| `gh:write` | `gh_pr_create`, `gh_pr_edit`, `gh_pr_comment`, `gh_pr_review`, `gh_pr_add_review`, `gh_pr_reply_comment`, `gh_pr_checkout`, `gh_issue_create`, `gh_issue_comment`, `gh_issue_close`, `gh_issue_edit`, `gh_run_rerun`, `gh_run_cancel`, `gh_workflow_run` | `ask` |
+| `gh:write` | `gh_pr_create`, `gh_pr_edit`, `gh_pr_comment`, `gh_pr_review`, `gh_pr_add_review`, `gh_pr_reply_comment`, `gh_pr_resolve_thread`, `gh_pr_unresolve_thread`, `gh_pr_checkout`, `gh_issue_create`, `gh_issue_comment`, `gh_issue_close`, `gh_issue_edit`, `gh_run_rerun`, `gh_run_cancel`, `gh_workflow_run` | `ask` |
 | `gh:merge` | `gh_pr_merge`, `gh_pr_close`, `gh_repo_create`, `gh_release_create` | `ask` |
 
 ## Adding a new tool
