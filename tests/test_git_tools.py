@@ -512,3 +512,94 @@ def test_rebase_abort(git_repo):
     rebase_abort(str(git_repo))
     # back on feature with original content
     assert readme.read_text() == "feature\n"
+
+
+# ---------------------------------------------------------------------------
+# commit --amend
+# ---------------------------------------------------------------------------
+
+def test_commit_amend_keeps_single_commit(git_repo):
+    """amend must replace HEAD, not create a new commit."""
+    (Path(git_repo) / "a.txt").write_text("a\n")
+    add(str(git_repo), ["a.txt"])
+    commit(str(git_repo), "first")
+
+    before = log(str(git_repo), n=10).count("\n")
+
+    (Path(git_repo) / "b.txt").write_text("b\n")
+    add(str(git_repo), ["b.txt"])
+    commit(str(git_repo), "first (amended)", amend=True)
+
+    after_log = log(str(git_repo), n=10)
+    assert after_log.count("\n") == before
+    assert "first (amended)" in after_log
+    assert "first\n" not in after_log.replace("first (amended)", "")
+
+
+def test_commit_amend_reword_without_staged_changes(git_repo):
+    """amend with nothing staged just rewrites HEAD's message."""
+    (Path(git_repo) / "a.txt").write_text("a\n")
+    add(str(git_repo), ["a.txt"])
+    commit(str(git_repo), "original message")
+
+    commit(str(git_repo), "reworded message", amend=True, allow_empty=True)
+
+    log_result = log(str(git_repo), n=5)
+    assert "reworded message" in log_result
+    assert "original message" not in log_result
+
+
+# ---------------------------------------------------------------------------
+# rebase --onto (three-point)
+# ---------------------------------------------------------------------------
+
+def test_rebase_onto_moves_commits_to_new_base(git_repo):
+    """git rebase --onto <newbase> <upstream> transplants commits between refs."""
+    # main: initial
+    # topic: branches off main, adds topic.txt
+    # feature: branches off topic, adds feature.txt
+    # we want feature's commits replayed directly onto main (skipping topic).
+    branch_create(str(git_repo), name="topic", checkout=True)
+    (Path(git_repo) / "topic.txt").write_text("topic\n")
+    add(str(git_repo), ["topic.txt"])
+    commit(str(git_repo), "topic: add topic.txt")
+
+    branch_create(str(git_repo), name="feature", checkout=True)
+    (Path(git_repo) / "feature.txt").write_text("feature\n")
+    add(str(git_repo), ["feature.txt"])
+    commit(str(git_repo), "feature: add feature.txt")
+
+    # rebase --onto main topic feature: replay commits reachable from feature
+    # but not topic, onto main. drops topic.txt, keeps feature.txt.
+    rebase(str(git_repo), onto="main", upstream="topic", branch="feature")
+
+    assert (Path(git_repo) / "feature.txt").exists()
+    assert not (Path(git_repo) / "topic.txt").exists()
+    log_result = log(str(git_repo), n=5)
+    assert "feature: add feature.txt" in log_result
+    assert "topic: add topic.txt" not in log_result
+
+
+def test_rebase_onto_without_branch_arg(git_repo):
+    """upstream without branch rebases the current HEAD."""
+    branch_create(str(git_repo), name="topic", checkout=True)
+    (Path(git_repo) / "topic.txt").write_text("topic\n")
+    add(str(git_repo), ["topic.txt"])
+    commit(str(git_repo), "topic: add topic.txt")
+
+    branch_create(str(git_repo), name="feature", checkout=True)
+    (Path(git_repo) / "feature.txt").write_text("feature\n")
+    add(str(git_repo), ["feature.txt"])
+    commit(str(git_repo), "feature: add feature.txt")
+
+    # already on feature; omit the branch arg
+    rebase(str(git_repo), onto="main", upstream="topic")
+
+    assert (Path(git_repo) / "feature.txt").exists()
+    assert not (Path(git_repo) / "topic.txt").exists()
+
+
+def test_rebase_branch_without_upstream_raises(git_repo):
+    """branch without upstream is a misconfiguration."""
+    with pytest.raises(CommandError):
+        rebase(str(git_repo), onto="main", branch="feature")
