@@ -9,6 +9,7 @@ from .fetch import fetch as fetch
 from .init import init as init
 from .log import blame as blame, log as log, show as show
 from .merge import merge as merge
+from .prune import prune as prune
 from .pull import pull as pull
 from .push import push as push, push_force as push_force
 from .rebase import rebase as rebase, rebase_abort as rebase_abort, rebase_continue as rebase_continue
