@@ -18,6 +18,7 @@ from gh_mcp.tools.git import (
     fetch,
     log,
     merge,
+    prune,
     pull,
     push,
     rebase,
@@ -603,3 +604,92 @@ def test_rebase_branch_without_upstream_raises(git_repo):
     """branch without upstream is a misconfiguration."""
     with pytest.raises(CommandError):
         rebase(str(git_repo), onto="main", branch="feature")
+
+
+# ---------------------------------------------------------------------------
+# prune — local-only cleanup
+# ---------------------------------------------------------------------------
+
+def _setup_repo_with_gone_branch(git_repo: Path, tmp_path: Path) -> Path:
+    """build a repo where local branch 'feature' tracks an origin ref that
+    has since been deleted — so its upstream appears as [gone]."""
+    bare = tmp_path / "bare.git"
+    subprocess.run(["git", "clone", "--bare", str(git_repo), str(bare)], check=True, capture_output=True)
+    remote_add(str(git_repo), name="origin", url=str(bare))
+
+    branch_create(str(git_repo), name="feature", checkout=True)
+    (git_repo / "f.txt").write_text("f\n")
+    add(str(git_repo), ["f.txt"])
+    commit(str(git_repo), "feature work")
+    push(str(git_repo), remote="origin", branch="feature", set_upstream=True)
+
+    # delete the branch on the bare remote; local still tracks origin/feature
+    subprocess.run(["git", "branch", "-D", "feature"], cwd=bare, check=True, capture_output=True)
+    # refresh local remote-tracking state so [gone] shows up
+    fetch(str(git_repo), remote="origin")
+
+    checkout(str(git_repo), "main")
+    return git_repo
+
+
+def test_prune_deletes_gone_branches(git_repo, tmp_path):
+    repo = _setup_repo_with_gone_branch(git_repo, tmp_path)
+
+    before = branch_list(str(repo))
+    assert "feature" in before
+
+    result = prune(str(repo), remote_refs=False, worktrees=False)
+
+    after = branch_list(str(repo))
+    assert "feature" not in after
+    assert "feature" in result
+
+
+def test_prune_dry_run_does_not_delete(git_repo, tmp_path):
+    repo = _setup_repo_with_gone_branch(git_repo, tmp_path)
+
+    result = prune(str(repo), dry_run=True)
+    assert "dry-run" in result
+    assert "would delete feature" in result
+    # branch still there
+    assert "feature" in branch_list(str(repo))
+
+
+def test_prune_skips_current_branch(git_repo, tmp_path):
+    """even if the current branch's upstream is gone, it is not deleted."""
+    repo = _setup_repo_with_gone_branch(git_repo, tmp_path)
+    # stay on the gone-upstream branch
+    checkout(str(repo), "feature")
+
+    prune(str(repo))
+
+    # current branch preserved
+    assert "feature" in branch_list(str(repo))
+
+
+def test_prune_worktree_cleans_deleted_directory(git_repo, tmp_path):
+    wt = tmp_path / "detached-wt"
+    worktree_add(str(git_repo), path=str(wt), branch="wt-branch")
+    # simulate manual deletion of the worktree directory
+    subprocess.run(["rm", "-rf", str(wt)], check=True)
+
+    result = prune(str(git_repo), remote_refs=False, gone_branches=False)
+
+    listing = worktree_list(str(git_repo))
+    assert str(wt) not in listing
+    assert "worktree prune" in result
+
+
+def test_prune_all_flags_off_is_noop(git_repo):
+    result = prune(
+        str(git_repo),
+        remote_refs=False,
+        gone_branches=False,
+        worktrees=False,
+    )
+    assert result == "(no output) from `git prune`"
+
+
+def test_prune_invalid_remote_rejected(git_repo):
+    with pytest.raises(CommandError):
+        prune(str(git_repo), remote="bad;name")
