@@ -33,6 +33,7 @@ def pr_add_review(
     body: str = "",
     inline_comments: list[dict] | None = None,
     repo: str = "",
+    repo_path: str = ".",
 ) -> str:
     """submit a PR review with optional inline comments via the GitHub API.
 
@@ -61,7 +62,7 @@ def pr_add_review(
             "side": c.get("side", "RIGHT"),
         })
     endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/reviews"
-    raw = _gh_api_post(endpoint, payload)
+    raw = _gh_api_post(endpoint, payload, cwd=repo_path)
     try:
         d = json.loads(raw)
         return f"review #{d['id']} submitted: {d['state']} by {d['user']['login']}"
@@ -75,6 +76,7 @@ def pr_reply_comment(
     comment_id: int,
     body: str,
     repo: str = "",
+    repo_path: str = ".",
 ) -> str:
     """reply to an existing inline review comment thread.
 
@@ -85,7 +87,7 @@ def pr_reply_comment(
         raise CommandError("reply body must not be empty")
     endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/comments"
     payload = {"body": body, "in_reply_to": comment_id}
-    raw = _gh_api_post(endpoint, payload)
+    raw = _gh_api_post(endpoint, payload, cwd=repo_path)
     try:
         d = json.loads(raw)
         return f"comment #{d['id']} posted by {d['user']['login']}: {d['body'][:100]}"

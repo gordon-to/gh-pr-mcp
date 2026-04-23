@@ -6,12 +6,12 @@ from ._api import _repo_args
 
 
 @tool("gh")
-def issue_view(issue: str | int, repo: str = "") -> str:
+def issue_view(issue: str | int, repo: str = "", repo_path: str = ".") -> str:
     """view issue details and comments (gh issue view)."""
     args = ["gh", "issue", "view", str(issue), "--json",
             "number,title,author,state,body,labels,assignees,comments"]
     args += _repo_args(repo)
-    raw = run_ok(args)
+    raw = run_ok(args, cwd=repo_path)
     try:
         d = json.loads(raw)
         lines = [
