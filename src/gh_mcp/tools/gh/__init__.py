@@ -8,6 +8,8 @@ from .pr_checkout import pr_checkout as pr_checkout
 from .pr_comment import pr_comment as pr_comment
 from .pr_create import pr_create as pr_create
 from .pr_edit import pr_edit as pr_edit
+from .pr_delete_comment import pr_delete_comment as pr_delete_comment
+from .pr_edit_comment import pr_edit_comment as pr_edit_comment
 from .pr_list import pr_list as pr_list
 from .pr_merge import pr_close as pr_close, pr_merge as pr_merge
 from .pr_resolve_thread import pr_resolve_thread as pr_resolve_thread, pr_unresolve_thread as pr_unresolve_thread

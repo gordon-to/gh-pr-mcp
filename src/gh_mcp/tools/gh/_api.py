@@ -46,6 +46,28 @@ def _gh_api_post(endpoint: str, payload: dict) -> str:
     return result.stdout
 
 
+def _gh_api_patch(endpoint: str, payload: dict) -> str:
+    """PATCH JSON to the GitHub REST API via gh api --input."""
+    args = ["gh", "api", "--method", "PATCH", endpoint, "--input", "-"]
+    result = subprocess.run(
+        args,
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise CommandError(f"gh api PATCH failed: {(result.stderr or result.stdout).strip()}")
+    return result.stdout
+
+
+def _gh_api_delete(endpoint: str) -> None:
+    """DELETE via the GitHub REST API via gh api."""
+    args = ["gh", "api", "--method", "DELETE", endpoint]
+    result = subprocess.run(args, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise CommandError(f"gh api DELETE failed: {(result.stderr or result.stdout).strip()}")
+
+
 def _gh_api_graphql(query: str, variables: dict | None = None) -> dict:
     """run a GraphQL query/mutation via gh api graphql. returns the 'data' object."""
     payload = {"query": query, "variables": variables or {}}
