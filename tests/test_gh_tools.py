@@ -25,6 +25,7 @@ from gh_mcp.tools.gh import (
     pr_edit,
     pr_list,
     pr_merge,
+    pr_delete_comment,
     pr_edit_comment,
     pr_reply_comment,
     pr_resolve_thread,
@@ -1045,3 +1046,23 @@ def test_pr_edit_comment_nonzero_exit_raises():
     with patch("subprocess.run", return_value=_mock_run(returncode=1, stderr="HTTP 404")):
         with pytest.raises(CommandError, match="HTTP 404"):
             pr_edit_comment(comment_id=99, body="oops")
+
+
+# ---------------------------------------------------------------------------
+# pr_delete_comment
+# ---------------------------------------------------------------------------
+
+def test_pr_delete_comment_sends_delete_to_correct_endpoint():
+    with patch("subprocess.run", return_value=_mock_run()) as mock:
+        result = pr_delete_comment(comment_id=42)
+    args = mock.call_args[0][0]
+    assert "--method" in args
+    assert "DELETE" in args
+    assert "pulls/comments/42" in " ".join(args)
+    assert result == "comment #42 deleted"
+
+
+def test_pr_delete_comment_nonzero_exit_raises():
+    with patch("subprocess.run", return_value=_mock_run(returncode=1, stderr="HTTP 404")):
+        with pytest.raises(CommandError, match="HTTP 404"):
+            pr_delete_comment(comment_id=99)
