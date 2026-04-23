@@ -25,6 +25,7 @@ from gh_mcp.tools.gh import (
     pr_edit,
     pr_list,
     pr_merge,
+    pr_edit_comment,
     pr_reply_comment,
     pr_resolve_thread,
     pr_review,
@@ -1014,3 +1015,33 @@ def test_pr_resolve_thread_surfaces_nonzero_exit():
     with patch("subprocess.run", return_value=_mock_run(returncode=1, stderr="HTTP 401")):
         with pytest.raises(CommandError, match="HTTP 401"):
             pr_resolve_thread("PRRT_abc")
+
+
+# ---------------------------------------------------------------------------
+# pr_edit_comment
+# ---------------------------------------------------------------------------
+
+def test_pr_edit_comment_patches_correct_endpoint():
+    response = {"id": 77, "user": {"login": "me"}, "body": "updated text"}
+    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(response))) as mock:
+        result = pr_edit_comment(comment_id=77, body="updated text")
+    args = mock.call_args[0][0]
+    assert "--method" in args
+    assert "PATCH" in args
+    assert "pulls/comments/77" in " ".join(args)
+    stdin_data = mock.call_args[1]["input"]
+    payload = json.loads(stdin_data)
+    assert payload["body"] == "updated text"
+    assert "#77" in result
+    assert "me" in result
+
+
+def test_pr_edit_comment_empty_body_raises():
+    with pytest.raises(CommandError):
+        pr_edit_comment(comment_id=77, body="   ")
+
+
+def test_pr_edit_comment_nonzero_exit_raises():
+    with patch("subprocess.run", return_value=_mock_run(returncode=1, stderr="HTTP 404")):
+        with pytest.raises(CommandError, match="HTTP 404"):
+            pr_edit_comment(comment_id=99, body="oops")
