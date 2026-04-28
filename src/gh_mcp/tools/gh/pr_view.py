@@ -7,15 +7,16 @@ from ._api import _api_repo, _gh_api_get, _gh_api_graphql, _repo_args
 
 
 @tool("gh")
-def pr_view(pr: str | int, repo: str = "") -> str:
+def pr_view(pr: str | int, repo: str = "", repo_path: str = ".") -> str:
     """view pull request details including description and comments (gh pr view).
 
     pr: PR number or branch name.
+    repo_path: local path to any checkout of the target repo (used for repo auto-detection when repo is omitted).
     """
     args = ["gh", "pr", "view", str(pr), "--json",
             "number,title,author,state,body,baseRefName,headRefName,reviews,comments,isDraft,mergeable,statusCheckRollup"]
     args += _repo_args(repo)
-    raw = run_ok(args)
+    raw = run_ok(args, cwd=repo_path)
     try:
         d = json.loads(raw)
         lines = [
@@ -46,17 +47,17 @@ def pr_view(pr: str | int, repo: str = "") -> str:
 
 
 @tool("gh")
-def pr_diff(pr: str | int, repo: str = "") -> str:
+def pr_diff(pr: str | int, repo: str = "", repo_path: str = ".") -> str:
     """show the diff for a pull request (gh pr diff)."""
     args = ["gh", "pr", "diff", str(pr)] + _repo_args(repo)
-    return format_result(run_ok(args), f"gh pr diff {pr}")
+    return format_result(run_ok(args, cwd=repo_path), f"gh pr diff {pr}")
 
 
 @tool("gh")
-def pr_checks(pr: str | int, repo: str = "") -> str:
+def pr_checks(pr: str | int, repo: str = "", repo_path: str = ".") -> str:
     """show CI check status for a pull request (gh pr checks)."""
     args = ["gh", "pr", "checks", str(pr)] + _repo_args(repo)
-    return format_result(run_ok(args), f"gh pr checks {pr}")
+    return format_result(run_ok(args, cwd=repo_path), f"gh pr checks {pr}")
 
 
 def _classify_author(user: dict) -> dict:
@@ -83,7 +84,7 @@ query($owner: String!, $name: String!, $number: Int!) {
 """
 
 
-def _resolve_owner_name(repo: str) -> tuple[str, str]:
+def _resolve_owner_name(repo: str, cwd: str = ".") -> tuple[str, str]:
     """return (owner, name). if repo is empty, query the current remote."""
     if repo:
         if "/" not in repo:
@@ -92,7 +93,7 @@ def _resolve_owner_name(repo: str) -> tuple[str, str]:
         return owner, name
     result = subprocess.run(
         ["gh", "repo", "view", "--json", "owner,name"],
-        capture_output=True, text=True,
+        capture_output=True, text=True, cwd=cwd,
     )
     if result.returncode != 0:
         raise CommandError(f"gh repo view failed: {(result.stderr or result.stdout).strip()}")
@@ -103,10 +104,10 @@ def _resolve_owner_name(repo: str) -> tuple[str, str]:
         raise CommandError(f"could not parse gh repo view output: {e}") from e
 
 
-def _fetch_thread_meta(pr: int, repo: str) -> dict[int, dict]:
+def _fetch_thread_meta(pr: int, repo: str, cwd: str = ".") -> dict[int, dict]:
     """map root-comment databaseId -> {resolve_id, resolved}."""
-    owner, name = _resolve_owner_name(repo)
-    data = _gh_api_graphql(_THREADS_QUERY, {"owner": owner, "name": name, "number": pr})
+    owner, name = _resolve_owner_name(repo, cwd=cwd)
+    data = _gh_api_graphql(_THREADS_QUERY, {"owner": owner, "name": name, "number": pr}, cwd=cwd)
     threads = (((data.get("repository") or {}).get("pullRequest") or {})
                .get("reviewThreads") or {}).get("nodes") or []
     out: dict[int, dict] = {}
@@ -126,6 +127,7 @@ def pr_review_threads(
     pr: str | int,
     repo: str = "",
     kind: str = "",
+    repo_path: str = ".",
 ) -> str:
     """fetch inline review comment threads on a PR, structured for agent use.
 
@@ -141,6 +143,7 @@ def pr_review_threads(
 
     kind: filter results — 'bot', 'human', 'outdated', 'active', 'resolved', 'unresolved'.
           Empty returns all.
+    repo_path: local path to any checkout of the target repo (used for repo auto-detection when repo is omitted).
 
     typical workflow:
       1. pr_review_threads(pr="5", kind="unresolved")  → see what still needs addressing
@@ -153,8 +156,8 @@ def pr_review_threads(
         )
 
     endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/comments?per_page=100"
-    comments: list[dict] = json.loads(_gh_api_get(endpoint))
-    thread_meta = _fetch_thread_meta(int(pr), repo)
+    comments: list[dict] = json.loads(_gh_api_get(endpoint, cwd=repo_path))
+    thread_meta = _fetch_thread_meta(int(pr), repo, cwd=repo_path)
 
     roots: dict[int, dict] = {}
     children: dict[int, list[dict]] = {}

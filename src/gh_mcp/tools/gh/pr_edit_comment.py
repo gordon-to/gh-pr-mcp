@@ -10,6 +10,7 @@ def pr_edit_comment(
     comment_id: int,
     body: str,
     repo: str = "",
+    repo_path: str = ".",
 ) -> str:
     """edit an existing pull request review comment (inline or reply).
 
@@ -20,7 +21,7 @@ def pr_edit_comment(
     if not body.strip():
         raise CommandError("comment body must not be empty")
     endpoint = f"repos/{_api_repo(repo)}/pulls/comments/{comment_id}"
-    raw = _gh_api_patch(endpoint, {"body": body})
+    raw = _gh_api_patch(endpoint, {"body": body}, cwd=repo_path)
     try:
         d = json.loads(raw)
         return f"comment #{d['id']} updated by {d['user']['login']}: {d['body'][:120]}"

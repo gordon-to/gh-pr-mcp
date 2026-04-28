@@ -12,6 +12,7 @@ def issue_list(
     assignee: str = "",
     label: str = "",
     limit: int = 30,
+    repo_path: str = ".",
 ) -> str:
     """list issues (gh issue list)."""
     args = ["gh", "issue", "list", "--state", state, "--limit", str(limit),
@@ -21,7 +22,7 @@ def issue_list(
         args += ["--assignee", assignee]
     if label:
         args += ["--label", label]
-    raw = run_ok(args)
+    raw = run_ok(args, cwd=repo_path)
     try:
         issues = json.loads(raw)
         if not issues:

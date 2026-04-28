@@ -13,10 +13,12 @@ def pr_list(
     base: str = "",
     label: str = "",
     limit: int = 30,
+    repo_path: str = ".",
 ) -> str:
     """list pull requests (gh pr list).
 
     state: 'open', 'closed', 'merged', or 'all'.
+    repo_path: local path to any checkout of the target repo (used for repo auto-detection when repo is omitted).
     """
     args = ["gh", "pr", "list", "--state", state, "--limit", str(limit), "--json",
             "number,title,author,state,headRefName,updatedAt,isDraft,mergeable,mergeStateStatus"]
@@ -27,7 +29,7 @@ def pr_list(
         args += ["--base", _validate_ref(base, "base")]
     if label:
         args += ["--label", label]
-    raw = run_ok(args)
+    raw = run_ok(args, cwd=repo_path)
     try:
         prs = json.loads(raw)
         if not prs:
