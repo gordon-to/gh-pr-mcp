@@ -17,7 +17,10 @@ def log(
     n: max number of commits (default 20).
     branch: show history of a specific branch or commit.
     base: if set, show range base..branch (or base..HEAD). use to see
-          only the commits on a feature branch, e.g. base="main".
+          only the commits on a feature branch, e.g. base="origin/main".
+          this is the right tool for "what commits are on my branch?" —
+          the base..HEAD range walks back to the merge base automatically,
+          so you don't need to call git_merge_base first.
     oneline: compact one-line format (default True).
     graph: show branch/merge graph (--graph).
     path: restrict to commits touching this file/dir.

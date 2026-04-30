@@ -12,7 +12,11 @@ def diff(
     """show changes between working tree, index, or commits (git diff).
 
     staged=True shows only staged changes.
-    commit shows diff against that ref (e.g. 'HEAD~1', 'main').
+    commit shows diff against that ref (e.g. 'HEAD~1', 'main'). a two-dot
+    range like 'main..HEAD' diffs the two tips directly. a three-dot range
+    like 'origin/main...HEAD' diffs from the merge base — use this for
+    "what did my branch change?" so unrelated commits on main don't show
+    up as reverse changes.
     path restricts to a file or directory.
     """
     args = ["git", "diff"]
