@@ -64,7 +64,7 @@ Match tool names in Claude Code's `settings.json` permissions:
 
 | Tier | Tool names | Suggested permission |
 |------|-----------|---------------------|
-| `git:read` | `git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`, `git_branch_list`, `git_remote_list`, `git_stash_list`, `git_worktree_list`, `git_tag_list` | `allow` |
+| `git:read` | `git_status`, `git_diff`, `git_log`, `git_show`, `git_blame`, `git_branch_list`, `git_remote_list`, `git_stash_list`, `git_worktree_list`, `git_tag_list`, `git_merge_base` | `allow` |
 | `git:local-write` | `git_add`, `git_commit`, `git_branch_create`, `git_checkout`, `git_stash_push`, `git_stash_pop`, `git_init` | `allow` |
 | `git:remote-read` | `git_fetch`, `git_pull`, `git_clone` | `allow` |
 | `git:remote-write` | `git_push`, `git_remote_add`, `git_tag_create` | `ask` |

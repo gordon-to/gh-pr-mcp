@@ -18,6 +18,7 @@ from gh_mcp.tools.git import (
     fetch,
     log,
     merge,
+    merge_base,
     prune,
     pull,
     push,
@@ -384,6 +385,46 @@ def test_merge_branch(git_repo):
     checkout(str(git_repo), "main")
     result = merge(str(git_repo), branch="feature")
     assert "feature" in result or "Already up to date" in result or "Merge" in result or "Fast-forward" in result
+
+
+# ---------------------------------------------------------------------------
+# merge-base
+# ---------------------------------------------------------------------------
+
+
+def test_merge_base_returns_fork_point(git_repo):
+    """fork point is the commit that was HEAD before each branch diverged."""
+    fork_sha = log(str(git_repo), n=1).split()[0]
+
+    branch_create(str(git_repo), name="feat", checkout=True)
+    (Path(git_repo) / "feat.txt").write_text("feat\n")
+    add(str(git_repo), ["feat.txt"])
+    commit(str(git_repo), "feat")
+
+    checkout(str(git_repo), "main")
+    (Path(git_repo) / "main.txt").write_text("main\n")
+    add(str(git_repo), ["main.txt"])
+    commit(str(git_repo), "main work")
+
+    result = merge_base(str(git_repo), branch="feat", base="main")
+    assert result.startswith(fork_sha)
+
+
+def test_merge_base_symmetric(git_repo):
+    """argument order doesn't matter."""
+    branch_create(str(git_repo), name="feat", checkout=True)
+    (Path(git_repo) / "feat.txt").write_text("feat\n")
+    add(str(git_repo), ["feat.txt"])
+    commit(str(git_repo), "feat")
+
+    a = merge_base(str(git_repo), branch="feat", base="main")
+    b = merge_base(str(git_repo), branch="main", base="feat")
+    assert a == b
+
+
+def test_merge_base_invalid_ref_raises(git_repo):
+    with pytest.raises(CommandError):
+        merge_base(str(git_repo), branch="HEAD", base="; rm -rf /")
 
 
 # ---------------------------------------------------------------------------

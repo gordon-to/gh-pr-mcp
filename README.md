@@ -12,7 +12,7 @@ An MCP (Model Context Protocol) server that exposes `git` and `gh` (GitHub CLI) 
 
 | Category | Examples | Permission level |
 |----------|----------|-----------------|
-| **Git: read** | `git_status`, `git_diff`, `git_log`, `git_branch_list` | Always allow |
+| **Git: read** | `git_status`, `git_diff`, `git_log`, `git_branch_list`, `git_merge_base` | Always allow |
 | **Git: local write** | `git_add`, `git_commit`, `git_branch_create`, `git_stash_push` | Always allow |
 | `git:remote-read` | `git_fetch`, `git_pull`, `git_clone` | Always allow |
 | `git:remote-write` | `git_push`, `git_remote_add`, `git_tag_create` | Ask |
