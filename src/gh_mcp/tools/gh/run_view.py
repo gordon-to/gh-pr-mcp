@@ -6,14 +6,18 @@ from ._api import _repo_args
 
 
 @tool("gh")
-def run_view(run_id: str | int, repo: str = "", log: bool = False, repo_path: str = ".") -> str:
+def run_view(
+    run_id: str | int, repo: str = "", log: bool = False, repo_path: str = "."
+) -> str:
     """view a workflow run's details or logs (gh run view)."""
     args = ["gh", "run", "view", str(run_id)] + _repo_args(repo)
     if log:
         args.append("--log")
     else:
         args.append("--json")
-        args.append("databaseId,name,status,conclusion,headBranch,event,jobs,startedAt,updatedAt")
+        args.append(
+            "databaseId,name,status,conclusion,headBranch,event,jobs,startedAt,updatedAt"
+        )
     raw = run_ok(args, cwd=repo_path)
     if log:
         return format_result(raw, f"gh run view {run_id} --log")
@@ -27,7 +31,9 @@ def run_view(run_id: str | int, repo: str = "", log: bool = False, repo_path: st
         if d.get("jobs"):
             lines.append("\njobs:")
             for job in d["jobs"]:
-                lines.append(f"  {job['name']}: {job.get('conclusion') or job.get('status')}")
+                lines.append(
+                    f"  {job['name']}: {job.get('conclusion') or job.get('status')}"
+                )
         return "\n".join(lines)
     except (json.JSONDecodeError, KeyError):
         return format_result(raw, f"gh run view {run_id}")
@@ -65,7 +71,9 @@ def run_job_view(
         for job in jobs:
             lines.append(f"{job['name']}: {job.get('conclusion') or job.get('status')}")
             for step in job.get("steps", []):
-                lines.append(f"  [{step.get('conclusion') or step.get('status', '?'):8}] {step['name']}")
+                lines.append(
+                    f"  [{step.get('conclusion') or step.get('status', '?'):8}] {step['name']}"
+                )
         return "\n".join(lines)
     except (json.JSONDecodeError, KeyError):
         return format_result(raw, f"gh run view {run_id}")

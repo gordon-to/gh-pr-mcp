@@ -1,46 +1,48 @@
 # gh-mcp
 
-An MCP (Model Context Protocol) server that exposes `git` and `gh` (GitHub CLI) operations as structured tools — enabling AI agents to perform all version control and GitHub workflows through explicit, permission-controlled tool calls rather than raw shell commands.
+A minimal MCP (Model Context Protocol) server exposing a focused set of GitHub helpers that the `gh` CLI doesn't cover well: structured PR review threads, GraphQL thread resolve/unresolve, inline-comment review submission, and per-comment edit/delete via the REST API.
 
-## Goals
+## Philosophy
 
-- **Replace raw git/gh usage** — every VCS operation is a named tool with typed inputs
-- **Simplify permission management** — tools are grouped by risk level so you can grant broad access to read-only ops and require confirmation only for destructive/remote writes
-- **Full workflow coverage** — branches, commits, PRs, issues, releases, worktrees, CI runs
+`git` and `gh` are already great at what they do. Wrapping them tool-by-tool just bloats the agent's tool list and gets in the way. The tools that earn a spot here are the ones that:
 
-## Tool Categories
+1. **Reduce token spend** by composing verbose `gh` JSON output into a tight summary (e.g. `pr_view`, `pr_list`, `run_view`, `run_job_view`, `pr_checks`), or
+2. **Use the GitHub API directly** for operations the `gh` CLI can't do in a single call (review-thread resolve/unresolve via GraphQL, replying to a specific review comment, editing/deleting review comments, posting a review with inline comments at specific lines).
 
-| Category | Examples | Permission level |
-|----------|----------|-----------------|
-| **Git: read** | `git_status`, `git_diff`, `git_log`, `git_branch_list`, `git_merge_base` | Always allow |
-| **Git: local write** | `git_add`, `git_commit`, `git_branch_create`, `git_stash_push` | Always allow |
-| `git:remote-read` | `git_fetch`, `git_pull`, `git_clone` | Always allow |
-| `git:remote-write` | `git_push`, `git_remote_add`, `git_tag_create` | Ask |
-| `git:integrate` | `git_merge`, `git_rebase`, `git_cherry_pick`, `git_worktree_add` | Ask |
-| `git:local-destructive` | `git_reset`, `git_restore`, `git_clean`, `git_branch_delete`, `git_prune` | Ask |
-| `git:remote-destructive` | `git_push_force` | Ask / Block |
-| `gh:read` | `gh_pr_list`, `gh_pr_view`, `gh_pr_review_threads`, `gh_run_list`, `gh_run_job_view`, `gh_workflow_list` | Always allow |
-| `gh:write` | `gh_pr_create`, `gh_pr_edit`, `gh_pr_add_review`, `gh_pr_reply_comment`, `gh_pr_resolve_thread`, `gh_pr_unresolve_thread`, `gh_run_rerun`, `gh_workflow_run` | Ask |
-| `gh:merge` | `gh_pr_merge`, `gh_pr_close`, `gh_repo_create`, `gh_release_create` | Ask |
+Everything else — `git status`, `git diff`, `gh pr create`, `gh issue list`, etc. — is faster, simpler, and more flexible to call via the shell directly.
+
+## Tools
+
+| Tool | What it does | Why it's here |
+|------|--------------|--------------|
+| `gh_pr_view` | PR details, body, reviews, comments, checks rollup | Token-reducing summary |
+| `gh_pr_list` | Open/closed PRs with mergeable state | Token-reducing summary |
+| `gh_pr_checks` | CI check status | Token-reducing summary |
+| `gh_run_view` | Workflow run status + job list | Token-reducing summary |
+| `gh_run_job_view` | Per-job details and (large) step logs | Helps when CI logs are massive |
+| `gh_pr_review_threads` | Inline review comments grouped into threads, filterable by bot/human/active/outdated/resolved/unresolved | REST + GraphQL combined; `gh` cannot do this |
+| `gh_pr_resolve_thread` | Mark a review thread resolved | GraphQL mutation only |
+| `gh_pr_unresolve_thread` | Mark a review thread unresolved | GraphQL mutation only |
+| `gh_pr_reply_comment` | Reply to a specific inline review comment by id | REST; no `gh` equivalent |
+| `gh_pr_edit_comment` | Edit an existing review comment | REST; no `gh` equivalent |
+| `gh_pr_delete_comment` | Delete a review comment | REST; no `gh` equivalent |
+| `gh_pr_add_review` | Submit a review with inline comments at specific lines | REST; `gh pr review` only supports top-level body |
+
+Recommended permission setup: allow everything in this server, and (separately) deny `Bash(gh api …)` so the model is funnelled through these helpers rather than rolling its own API calls.
 
 ## Development
 
 ```bash
-# Install with uv
 uv sync
-
-# Run tests
 uv run pytest
-
-# Run server directly
 uv run gh-mcp
 ```
 
-## MCP Configuration
+## MCP configuration
 
-### Project-scoped (for development / testing latest changes)
+### Project-scoped (worktree under active development)
 
-Add to `.mcp.json` in your project root (points at the worktree copy):
+`.mcp.json` in your project root points at the worktree:
 
 ```json
 {
@@ -53,7 +55,7 @@ Add to `.mcp.json` in your project root (points at the worktree copy):
 }
 ```
 
-### Global Claude config (stable — points at main)
+### Global config (stable)
 
 ```json
 {
@@ -71,8 +73,15 @@ Add to `.mcp.json` in your project root (points at the worktree copy):
 ```
 src/gh_mcp/
 ├── server.py        # FastMCP app + tool registration
-├── tools/
-│   ├── git.py       # All git_* tools
-│   └── gh.py        # All gh_* tools
-└── run.py           # Subprocess helpers + input validation
+├── app.py           # mcp + @tool decorator
+├── run.py           # subprocess helpers + input validation
+└── tools/gh/
+    ├── _api.py                # gh api GET/POST/PATCH/DELETE + GraphQL helpers
+    ├── pr_view.py             # pr_view, pr_checks, pr_review_threads
+    ├── pr_list.py             # pr_list
+    ├── pr_review.py           # pr_add_review, pr_reply_comment
+    ├── pr_resolve_thread.py   # pr_resolve_thread, pr_unresolve_thread
+    ├── pr_edit_comment.py
+    ├── pr_delete_comment.py
+    └── run_view.py            # run_view, run_job_view
 ```

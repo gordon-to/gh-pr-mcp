@@ -1,29 +1,8 @@
 import json
 
 from ...app import tool
-from ...run import CommandError, format_result, run
-from ._api import _api_repo, _gh_api_post, _repo_args
-
-
-@tool("gh")
-def pr_review(
-    pr: str | int,
-    event: str,
-    body: str = "",
-    repo: str = "",
-    repo_path: str = ".",
-) -> str:
-    """submit a review on a pull request (gh pr review).
-
-    event: 'approve', 'request-changes', or 'comment'.
-    body: review comment body (required for 'request-changes' and 'comment').
-    """
-    if event not in ("approve", "request-changes", "comment"):
-        raise CommandError(f"event must be 'approve', 'request-changes', or 'comment', got {event!r}")
-    args = ["gh", "pr", "review", str(pr), f"--{event}"] + _repo_args(repo)
-    if body:
-        args += ["--body", body]
-    return format_result(run(args, cwd=repo_path), f"gh pr review {pr}")
+from ...run import CommandError, format_result
+from ._api import _api_repo, _gh_api_post
 
 
 @tool("gh")
@@ -50,17 +29,28 @@ def pr_add_review(
     """
     event_upper = event.upper()
     if event_upper not in ("APPROVE", "REQUEST_CHANGES", "COMMENT"):
-        raise CommandError(f"event must be APPROVE, REQUEST_CHANGES, or COMMENT, got {event!r}")
+        raise CommandError(
+            f"event must be APPROVE, REQUEST_CHANGES, or COMMENT, got {event!r}"
+        )
     payload: dict = {"event": event_upper, "body": body, "comments": []}
-    for c in (inline_comments or []):
-        if not isinstance(c, dict) or "path" not in c or "line" not in c or "body" not in c:
-            raise CommandError("each inline_comment needs 'path', 'line', and 'body' keys")
-        payload["comments"].append({
-            "path": c["path"],
-            "line": int(c["line"]),
-            "body": c["body"],
-            "side": c.get("side", "RIGHT"),
-        })
+    for c in inline_comments or []:
+        if (
+            not isinstance(c, dict)
+            or "path" not in c
+            or "line" not in c
+            or "body" not in c
+        ):
+            raise CommandError(
+                "each inline_comment needs 'path', 'line', and 'body' keys"
+            )
+        payload["comments"].append(
+            {
+                "path": c["path"],
+                "line": int(c["line"]),
+                "body": c["body"],
+                "side": c.get("side", "RIGHT"),
+            }
+        )
     endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/reviews"
     raw = _gh_api_post(endpoint, payload, cwd=repo_path)
     try:

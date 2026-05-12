@@ -22,7 +22,9 @@ mutation($id: ID!) {
 
 def _validate_thread_id(thread_id: str) -> str:
     if not isinstance(thread_id, str) or not thread_id.strip():
-        raise CommandError("thread_id must be a non-empty string (GraphQL node id from pr_review_threads.resolve_id)")
+        raise CommandError(
+            "thread_id must be a non-empty string (GraphQL node id from pr_review_threads.resolve_id)"
+        )
     return thread_id
 
 
