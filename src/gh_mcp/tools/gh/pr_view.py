@@ -13,8 +13,14 @@ def pr_view(pr: str | int, repo: str = "", repo_path: str = ".") -> str:
     pr: PR number or branch name.
     repo_path: local path to any checkout of the target repo (used for repo auto-detection when repo is omitted).
     """
-    args = ["gh", "pr", "view", str(pr), "--json",
-            "number,title,author,state,body,baseRefName,headRefName,reviews,comments,isDraft,mergeable,statusCheckRollup"]
+    args = [
+        "gh",
+        "pr",
+        "view",
+        str(pr),
+        "--json",
+        "number,title,author,state,body,baseRefName,headRefName,reviews,comments,isDraft,mergeable,statusCheckRollup",
+    ]
     args += _repo_args(repo)
     raw = run_ok(args, cwd=repo_path)
     try:
@@ -44,13 +50,6 @@ def pr_view(pr: str | int, repo: str = "", repo_path: str = ".") -> str:
         return "\n".join(lines)
     except (json.JSONDecodeError, KeyError):
         return format_result(raw, f"gh pr view {pr}")
-
-
-@tool("gh")
-def pr_diff(pr: str | int, repo: str = "", repo_path: str = ".") -> str:
-    """show the diff for a pull request (gh pr diff)."""
-    args = ["gh", "pr", "diff", str(pr)] + _repo_args(repo)
-    return format_result(run_ok(args, cwd=repo_path), f"gh pr diff {pr}")
 
 
 @tool("gh")
@@ -93,10 +92,14 @@ def _resolve_owner_name(repo: str, cwd: str = ".") -> tuple[str, str]:
         return owner, name
     result = subprocess.run(
         ["gh", "repo", "view", "--json", "owner,name"],
-        capture_output=True, text=True, cwd=cwd,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
     )
     if result.returncode != 0:
-        raise CommandError(f"gh repo view failed: {(result.stderr or result.stdout).strip()}")
+        raise CommandError(
+            f"gh repo view failed: {(result.stderr or result.stdout).strip()}"
+        )
     try:
         d = json.loads(result.stdout)
         return d["owner"]["login"], d["name"]
@@ -107,9 +110,13 @@ def _resolve_owner_name(repo: str, cwd: str = ".") -> tuple[str, str]:
 def _fetch_thread_meta(pr: int, repo: str, cwd: str = ".") -> dict[int, dict]:
     """map root-comment databaseId -> {resolve_id, resolved}."""
     owner, name = _resolve_owner_name(repo, cwd=cwd)
-    data = _gh_api_graphql(_THREADS_QUERY, {"owner": owner, "name": name, "number": pr}, cwd=cwd)
-    threads = (((data.get("repository") or {}).get("pullRequest") or {})
-               .get("reviewThreads") or {}).get("nodes") or []
+    data = _gh_api_graphql(
+        _THREADS_QUERY, {"owner": owner, "name": name, "number": pr}, cwd=cwd
+    )
+    threads = (
+        ((data.get("repository") or {}).get("pullRequest") or {}).get("reviewThreads")
+        or {}
+    ).get("nodes") or []
     out: dict[int, dict] = {}
     for t in threads:
         comments = ((t.get("comments") or {}).get("nodes")) or []
@@ -118,7 +125,10 @@ def _fetch_thread_meta(pr: int, repo: str, cwd: str = ".") -> dict[int, dict]:
         db_id = comments[0].get("databaseId")
         if db_id is None:
             continue
-        out[int(db_id)] = {"resolve_id": t.get("id", ""), "resolved": bool(t.get("isResolved"))}
+        out[int(db_id)] = {
+            "resolve_id": t.get("id", ""),
+            "resolved": bool(t.get("isResolved")),
+        }
     return out
 
 
@@ -150,7 +160,14 @@ def pr_review_threads(
       2. pr_reply_comment(pr="5", comment_id=<thread_id>, body="fixed in abc123")
       3. pr_resolve_thread(thread_id=<resolve_id>)
     """
-    if kind and kind not in ("bot", "human", "outdated", "active", "resolved", "unresolved"):
+    if kind and kind not in (
+        "bot",
+        "human",
+        "outdated",
+        "active",
+        "resolved",
+        "unresolved",
+    ):
         raise CommandError(
             f"unknown kind {kind!r}: use 'bot', 'human', 'outdated', 'active', 'resolved', or 'unresolved'"
         )
@@ -175,24 +192,26 @@ def pr_review_threads(
         # position is null when the line the comment was on is no longer in the diff
         outdated = root.get("position") is None
         meta = thread_meta.get(cid, {})
-        threads.append({
-            "thread_id": cid,
-            "resolve_id": meta.get("resolve_id", ""),
-            "resolved": meta.get("resolved", False),
-            "file": root.get("path", ""),
-            "line": root.get("line") or root.get("original_line"),
-            "outdated": outdated,
-            "author": _classify_author(root.get("user", {})),
-            "body": root.get("body", ""),
-            "replies": [
-                {
-                    "id": r["id"],
-                    "author": _classify_author(r.get("user", {})),
-                    "body": r.get("body", ""),
-                }
-                for r in children.get(cid, [])
-            ],
-        })
+        threads.append(
+            {
+                "thread_id": cid,
+                "resolve_id": meta.get("resolve_id", ""),
+                "resolved": meta.get("resolved", False),
+                "file": root.get("path", ""),
+                "line": root.get("line") or root.get("original_line"),
+                "outdated": outdated,
+                "author": _classify_author(root.get("user", {})),
+                "body": root.get("body", ""),
+                "replies": [
+                    {
+                        "id": r["id"],
+                        "author": _classify_author(r.get("user", {})),
+                        "body": r.get("body", ""),
+                    }
+                    for r in children.get(cid, [])
+                ],
+            }
+        )
 
     if kind == "bot":
         threads = [t for t in threads if t["author"]["type"] == "bot"]

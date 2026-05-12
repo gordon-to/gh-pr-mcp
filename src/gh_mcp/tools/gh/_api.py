@@ -28,7 +28,9 @@ def _gh_api_get(endpoint: str, paginate: bool = False, cwd: str = ".") -> str:
     args.append(endpoint)
     result = subprocess.run(args, capture_output=True, text=True, cwd=cwd)
     if result.returncode != 0:
-        raise CommandError(f"gh api GET failed: {(result.stderr or result.stdout).strip()}")
+        raise CommandError(
+            f"gh api GET failed: {(result.stderr or result.stdout).strip()}"
+        )
     return result.stdout
 
 
@@ -43,7 +45,9 @@ def _gh_api_post(endpoint: str, payload: dict, cwd: str = ".") -> str:
         cwd=cwd,
     )
     if result.returncode != 0:
-        raise CommandError(f"gh api POST failed: {(result.stderr or result.stdout).strip()}")
+        raise CommandError(
+            f"gh api POST failed: {(result.stderr or result.stdout).strip()}"
+        )
     return result.stdout
 
 
@@ -58,7 +62,9 @@ def _gh_api_patch(endpoint: str, payload: dict, cwd: str = ".") -> str:
         cwd=cwd,
     )
     if result.returncode != 0:
-        raise CommandError(f"gh api PATCH failed: {(result.stderr or result.stdout).strip()}")
+        raise CommandError(
+            f"gh api PATCH failed: {(result.stderr or result.stdout).strip()}"
+        )
     return result.stdout
 
 
@@ -67,7 +73,9 @@ def _gh_api_delete(endpoint: str, cwd: str = ".") -> None:
     args = ["gh", "api", "--method", "DELETE", endpoint]
     result = subprocess.run(args, capture_output=True, text=True, cwd=cwd)
     if result.returncode != 0:
-        raise CommandError(f"gh api DELETE failed: {(result.stderr or result.stdout).strip()}")
+        raise CommandError(
+            f"gh api DELETE failed: {(result.stderr or result.stdout).strip()}"
+        )
 
 
 def _gh_api_graphql(query: str, variables: dict | None = None, cwd: str = ".") -> dict:
@@ -82,7 +90,9 @@ def _gh_api_graphql(query: str, variables: dict | None = None, cwd: str = ".") -
         cwd=cwd,
     )
     if result.returncode != 0:
-        raise CommandError(f"gh api graphql failed: {(result.stderr or result.stdout).strip()}")
+        raise CommandError(
+            f"gh api graphql failed: {(result.stderr or result.stdout).strip()}"
+        )
     try:
         body = json.loads(result.stdout)
     except json.JSONDecodeError as e:

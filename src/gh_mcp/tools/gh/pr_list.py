@@ -20,8 +20,17 @@ def pr_list(
     state: 'open', 'closed', 'merged', or 'all'.
     repo_path: local path to any checkout of the target repo (used for repo auto-detection when repo is omitted).
     """
-    args = ["gh", "pr", "list", "--state", state, "--limit", str(limit), "--json",
-            "number,title,author,state,headRefName,updatedAt,isDraft,mergeable,mergeStateStatus"]
+    args = [
+        "gh",
+        "pr",
+        "list",
+        "--state",
+        state,
+        "--limit",
+        str(limit),
+        "--json",
+        "number,title,author,state,headRefName,updatedAt,isDraft,mergeable,mergeStateStatus",
+    ]
     args += _repo_args(repo)
     if author:
         args += ["--author", author]
