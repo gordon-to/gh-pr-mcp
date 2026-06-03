@@ -13,12 +13,12 @@ def pr_list(
     base: str = "",
     label: str = "",
     limit: int = 30,
-    repo_path: str = ".",
+    repo_path: str = "",
 ) -> str:
     """list pull requests (gh pr list).
 
     state: 'open', 'closed', 'merged', or 'all'.
-    repo_path: local path to any checkout of the target repo (used for repo auto-detection when repo is omitted).
+    repo_path: optional local checkout to resolve the repo from. Defaults to the current project directory (where Claude Code is running), so you rarely need to set it. Set it only to target a different checkout.
     """
     args = [
         "gh",

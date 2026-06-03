@@ -6,7 +6,7 @@ from ._api import _api_repo, _gh_api_delete
 def pr_delete_comment(
     comment_id: int,
     repo: str = "",
-    repo_path: str = ".",
+    repo_path: str = "",
 ) -> str:
     """delete an existing pull request review comment (inline or reply).
 

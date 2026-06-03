@@ -1,7 +1,7 @@
 import json
 import subprocess
 
-from ...run import CommandError
+from ...run import CommandError, resolve_cwd
 
 
 def _repo_args(repo: str) -> list[str]:
@@ -26,7 +26,7 @@ def _gh_api_get(endpoint: str, paginate: bool = False, cwd: str = ".") -> str:
     if paginate:
         args.append("--paginate")
     args.append(endpoint)
-    result = subprocess.run(args, capture_output=True, text=True, cwd=cwd)
+    result = subprocess.run(args, capture_output=True, text=True, cwd=resolve_cwd(cwd))
     if result.returncode != 0:
         raise CommandError(
             f"gh api GET failed: {(result.stderr or result.stdout).strip()}"
@@ -42,7 +42,7 @@ def _gh_api_post(endpoint: str, payload: dict, cwd: str = ".") -> str:
         input=json.dumps(payload),
         capture_output=True,
         text=True,
-        cwd=cwd,
+        cwd=resolve_cwd(cwd),
     )
     if result.returncode != 0:
         raise CommandError(
@@ -59,7 +59,7 @@ def _gh_api_patch(endpoint: str, payload: dict, cwd: str = ".") -> str:
         input=json.dumps(payload),
         capture_output=True,
         text=True,
-        cwd=cwd,
+        cwd=resolve_cwd(cwd),
     )
     if result.returncode != 0:
         raise CommandError(
@@ -71,7 +71,7 @@ def _gh_api_patch(endpoint: str, payload: dict, cwd: str = ".") -> str:
 def _gh_api_delete(endpoint: str, cwd: str = ".") -> None:
     """DELETE via the GitHub REST API via gh api."""
     args = ["gh", "api", "--method", "DELETE", endpoint]
-    result = subprocess.run(args, capture_output=True, text=True, cwd=cwd)
+    result = subprocess.run(args, capture_output=True, text=True, cwd=resolve_cwd(cwd))
     if result.returncode != 0:
         raise CommandError(
             f"gh api DELETE failed: {(result.stderr or result.stdout).strip()}"
@@ -87,7 +87,7 @@ def _gh_api_graphql(query: str, variables: dict | None = None, cwd: str = ".") -
         input=json.dumps(payload),
         capture_output=True,
         text=True,
-        cwd=cwd,
+        cwd=resolve_cwd(cwd),
     )
     if result.returncode != 0:
         raise CommandError(

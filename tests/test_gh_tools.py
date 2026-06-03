@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gh_mcp.run import CommandError
+from gh_mcp.run import CommandError, resolve_cwd
 from gh_mcp.tools.gh import (
     pr_add_review,
     pr_checks,
@@ -33,6 +33,45 @@ def _mock_run(returncode: int = 0, stdout: str = "", stderr: str = ""):
     m.stdout = stdout
     m.stderr = stderr
     return m
+
+
+# ---------------------------------------------------------------------------
+# resolve_cwd — repo auto-detection working directory
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_cwd_explicit_path_wins(tmp_path):
+    assert resolve_cwd(str(tmp_path)) == str(tmp_path)
+
+
+def test_resolve_cwd_falls_back_to_claude_project_dir(tmp_path):
+    # "." would resolve to the server's own fixed cwd; instead we use the
+    # client's launch dir that Claude Code exports.
+    with patch.dict("os.environ", {"CLAUDE_PROJECT_DIR": str(tmp_path)}, clear=True):
+        assert resolve_cwd(".") == str(tmp_path)
+        assert resolve_cwd("") == str(tmp_path)
+        assert resolve_cwd(None) == str(tmp_path)
+
+
+def test_resolve_cwd_prefers_claude_project_dir_over_pwd(tmp_path):
+    proj = tmp_path / "proj"
+    pwd = tmp_path / "pwd"
+    proj.mkdir()
+    pwd.mkdir()
+    env = {"CLAUDE_PROJECT_DIR": str(proj), "PWD": str(pwd)}
+    with patch.dict("os.environ", env, clear=True):
+        assert resolve_cwd(".") == str(proj)
+
+
+def test_resolve_cwd_falls_back_to_pwd_when_no_project_dir(tmp_path):
+    with patch.dict("os.environ", {"PWD": str(tmp_path)}, clear=True):
+        assert resolve_cwd(".") == str(tmp_path)
+
+
+def test_resolve_cwd_ignores_nonexistent_env_dirs():
+    env = {"CLAUDE_PROJECT_DIR": "/no/such/dir/xyz", "PWD": "/also/missing"}
+    with patch.dict("os.environ", env, clear=True):
+        assert resolve_cwd(".") == "."
 
 
 # ---------------------------------------------------------------------------

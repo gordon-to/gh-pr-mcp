@@ -10,7 +10,7 @@ def pr_edit_comment(
     comment_id: int,
     body: str,
     repo: str = "",
-    repo_path: str = ".",
+    repo_path: str = "",
 ) -> str:
     """edit an existing pull request review comment (inline or reply).
 

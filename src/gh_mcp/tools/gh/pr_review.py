@@ -12,7 +12,7 @@ def pr_add_review(
     body: str = "",
     inline_comments: list[dict] | None = None,
     repo: str = "",
-    repo_path: str = ".",
+    repo_path: str = "",
 ) -> str:
     """submit a PR review with optional inline comments via the GitHub API.
 
@@ -66,7 +66,7 @@ def pr_reply_comment(
     comment_id: int,
     body: str,
     repo: str = "",
-    repo_path: str = ".",
+    repo_path: str = "",
 ) -> str:
     """reply to an existing inline review comment thread.
 

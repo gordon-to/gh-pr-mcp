@@ -7,7 +7,7 @@ from ._api import _repo_args
 
 @tool("gh")
 def run_view(
-    run_id: str | int, repo: str = "", log: bool = False, repo_path: str = "."
+    run_id: str | int, repo: str = "", log: bool = False, repo_path: str = ""
 ) -> str:
     """view a workflow run's details or logs (gh run view)."""
     args = ["gh", "run", "view", str(run_id)] + _repo_args(repo)
@@ -45,7 +45,7 @@ def run_job_view(
     job_name: str = "",
     repo: str = "",
     log: bool = False,
-    repo_path: str = ".",
+    repo_path: str = "",
 ) -> str:
     """view details or logs for a specific job within a run (gh run view --job).
 

@@ -2,16 +2,16 @@ import json
 import subprocess
 
 from ...app import tool
-from ...run import CommandError, format_result, run_ok
+from ...run import CommandError, format_result, resolve_cwd, run_ok
 from ._api import _api_repo, _gh_api_get, _gh_api_graphql, _repo_args
 
 
 @tool("gh")
-def pr_view(pr: str | int, repo: str = "", repo_path: str = ".") -> str:
+def pr_view(pr: str | int, repo: str = "", repo_path: str = "") -> str:
     """view pull request details including description and comments (gh pr view).
 
     pr: PR number or branch name.
-    repo_path: local path to any checkout of the target repo (used for repo auto-detection when repo is omitted).
+    repo_path: optional local checkout to resolve the repo from. Defaults to the current project directory (where Claude Code is running), so you rarely need to set it. Set it only to target a different checkout.
     """
     args = [
         "gh",
@@ -53,7 +53,7 @@ def pr_view(pr: str | int, repo: str = "", repo_path: str = ".") -> str:
 
 
 @tool("gh")
-def pr_checks(pr: str | int, repo: str = "", repo_path: str = ".") -> str:
+def pr_checks(pr: str | int, repo: str = "", repo_path: str = "") -> str:
     """show CI check status for a pull request (gh pr checks)."""
     args = ["gh", "pr", "checks", str(pr)] + _repo_args(repo)
     return format_result(run_ok(args, cwd=repo_path), f"gh pr checks {pr}")
@@ -94,7 +94,7 @@ def _resolve_owner_name(repo: str, cwd: str = ".") -> tuple[str, str]:
         ["gh", "repo", "view", "--json", "owner,name"],
         capture_output=True,
         text=True,
-        cwd=cwd,
+        cwd=resolve_cwd(cwd),
     )
     if result.returncode != 0:
         raise CommandError(
@@ -137,7 +137,7 @@ def pr_review_threads(
     pr: str | int,
     repo: str = "",
     kind: str = "",
-    repo_path: str = ".",
+    repo_path: str = "",
 ) -> str:
     """fetch inline review comment threads on a PR, structured for agent use.
 
@@ -153,7 +153,7 @@ def pr_review_threads(
 
     kind: filter results — 'bot', 'human', 'outdated', 'active', 'resolved', 'unresolved'.
           Empty returns all.
-    repo_path: local path to any checkout of the target repo (used for repo auto-detection when repo is omitted).
+    repo_path: optional local checkout to resolve the repo from. Defaults to the current project directory (where Claude Code is running), so you rarely need to set it. Set it only to target a different checkout.
 
     typical workflow:
       1. pr_review_threads(pr="5", kind="unresolved")  → see what still needs addressing
