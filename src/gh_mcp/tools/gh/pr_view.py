@@ -43,7 +43,7 @@ def pr_view(pr: str | int, repo: str = "", repo_path: str = "") -> str:
         "view",
         str(pr),
         "--json",
-        "number,title,author,state,body,baseRefName,headRefName,reviews,comments,isDraft,mergeable,statusCheckRollup",
+        "number,title,author,state,body,baseRefName,headRefName,reviews,comments,isDraft,mergeable,statusCheckRollup,reviewDecision,reviewRequests",
     ]
     args += _repo_args(repo)
     raw = run_ok(args, cwd=repo_path)
@@ -55,6 +55,10 @@ def pr_view(pr: str | int, repo: str = "", repo_path: str = "") -> str:
         ]
         if d.get("isDraft"):
             lines.append("DRAFT")
+        if d.get("reviewDecision"):
+            lines.append(f"review decision: {d['reviewDecision']}")
+        if pending := _format_review_requests(d.get("reviewRequests") or []):
+            lines.append(f"awaiting review: {pending}")
         if d.get("body"):
             lines.append(f"\n{d['body']}")
         if d.get("reviews"):
@@ -83,11 +87,61 @@ def pr_checks(pr: str | int, repo: str = "", repo_path: str = "") -> str:
     return format_result(run_ok(args, cwd=repo_path), f"gh pr checks {pr}")
 
 
+_STATUS_LETTER = {
+    "added": "A",
+    "removed": "D",
+    "modified": "M",
+    "renamed": "R",
+    "copied": "C",
+    "changed": "M",
+    "unchanged": "=",
+}
+
+
+@tool("gh")
+def pr_files(pr: str | int, repo: str = "", repo_path: str = "") -> str:
+    """list files changed by a pull request as a compact diffstat (no patch blobs).
+
+    Per file: status letter (A/D/M/R/C), path (with rename origin), +adds/-dels,
+    plus a totals header. Use this to triage a PR you have NOT checked out — in a
+    local worktree, `git diff --name-status origin/<base>...HEAD` is free and faster.
+
+    repo_path: optional local checkout to resolve the repo from. Defaults to the current project directory (where Claude Code is running), so you rarely need to set it. Set it only to target a different checkout.
+    """
+    endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/files?per_page=100"
+    files = json.loads(_gh_api_get(endpoint, paginate=True, cwd=repo_path))
+    if not files:
+        return "no files changed"
+    total_add = sum(f.get("additions", 0) for f in files)
+    total_del = sum(f.get("deletions", 0) for f in files)
+    lines = [f"{len(files)} files  +{total_add} -{total_del}"]
+    for f in files:
+        letter = _STATUS_LETTER.get(f.get("status", ""), "?")
+        path = f["filename"]
+        if prev := f.get("previous_filename"):
+            path = f"{path} (from {prev})"
+        lines.append(
+            f"  {letter}  {path}  +{f.get('additions', 0)} -{f.get('deletions', 0)}"
+        )
+    return "\n".join(lines)
+
+
 def _classify_author(user: dict) -> Author:
     return {
         "login": user.get("login", ""),
         "type": "bot" if user.get("type") == "Bot" else "human",
     }
+
+
+def _format_review_requests(requests: list[dict]) -> str:
+    """render pending reviewer requests as 'login, team/slug', skipping unknowns."""
+    names = []
+    for r in requests:
+        if login := r.get("login"):
+            names.append(login)
+        elif slug := (r.get("slug") or r.get("name")):
+            names.append(f"team/{slug}")
+    return ", ".join(names)
 
 
 _THREADS_QUERY = """

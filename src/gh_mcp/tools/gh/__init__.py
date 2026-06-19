@@ -11,6 +11,7 @@ from .pr_review import (
 )
 from .pr_view import (
     pr_checks as pr_checks,
+    pr_files as pr_files,
     pr_review_threads as pr_review_threads,
     pr_view as pr_view,
 )

@@ -16,6 +16,7 @@ from gh_mcp.tools.gh import (
     pr_checks,
     pr_delete_comment,
     pr_edit_comment,
+    pr_files,
     pr_list,
     pr_reply_comment,
     pr_resolve_thread,
@@ -216,6 +217,110 @@ def test_pr_view_shows_reviews():
         result = pr_view("6")
     assert "eve" in result
     assert "APPROVED" in result
+
+
+def test_pr_view_shows_review_decision_and_pending_reviewers():
+    pr_data = {
+        "number": 7,
+        "title": "needs review",
+        "author": {"login": "dan"},
+        "state": "OPEN",
+        "body": "",
+        "baseRefName": "main",
+        "headRefName": "fix/y",
+        "reviews": [],
+        "comments": [],
+        "isDraft": False,
+        "mergeable": "MERGEABLE",
+        "statusCheckRollup": [],
+        "reviewDecision": "CHANGES_REQUESTED",
+        "reviewRequests": [{"login": "frank"}, {"slug": "backend"}],
+    }
+    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(pr_data))):
+        result = pr_view("7")
+    assert "review decision: CHANGES_REQUESTED" in result
+    assert "awaiting review: frank, team/backend" in result
+
+
+def test_pr_view_omits_review_lines_when_absent():
+    pr_data = {
+        "number": 8,
+        "title": "no decision",
+        "author": {"login": "dan"},
+        "state": "OPEN",
+        "body": "",
+        "baseRefName": "main",
+        "headRefName": "fix/z",
+        "reviews": [],
+        "comments": [],
+        "isDraft": False,
+        "mergeable": "MERGEABLE",
+        "statusCheckRollup": [],
+        "reviewDecision": "",
+        "reviewRequests": [],
+    }
+    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(pr_data))):
+        result = pr_view("8")
+    assert "review decision" not in result
+    assert "awaiting review" not in result
+
+
+def test_pr_view_requests_review_decision_fields():
+    with patch(
+        "subprocess.run", return_value=_mock_run(stdout="{}")
+    ) as mock:
+        pr_view("9")
+    json_arg = mock.call_args[0][0][mock.call_args[0][0].index("--json") + 1]
+    assert "reviewDecision" in json_arg
+    assert "reviewRequests" in json_arg
+
+
+# ---------------------------------------------------------------------------
+# pr_files
+# ---------------------------------------------------------------------------
+
+
+def test_pr_files_formats_diffstat():
+    files = [
+        {"filename": "src/a.py", "status": "modified", "additions": 10, "deletions": 2},
+        {"filename": "tests/b.py", "status": "added", "additions": 50, "deletions": 0},
+        {"filename": "old.py", "status": "removed", "additions": 0, "deletions": 40},
+    ]
+    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(files))):
+        result = pr_files("5")
+    assert "3 files  +60 -42" in result
+    assert "M  src/a.py  +10 -2" in result
+    assert "A  tests/b.py  +50 -0" in result
+    assert "D  old.py  +0 -40" in result
+
+
+def test_pr_files_shows_rename_origin():
+    files = [
+        {
+            "filename": "src/new.py",
+            "status": "renamed",
+            "additions": 1,
+            "deletions": 1,
+            "previous_filename": "src/old.py",
+        }
+    ]
+    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(files))):
+        result = pr_files("5")
+    assert "R  src/new.py (from src/old.py)  +1 -1" in result
+
+
+def test_pr_files_empty():
+    with patch("subprocess.run", return_value=_mock_run(stdout="[]")):
+        result = pr_files("5")
+    assert result == "no files changed"
+
+
+def test_pr_files_hits_paginated_files_endpoint():
+    with patch("subprocess.run", return_value=_mock_run(stdout="[]")) as mock:
+        pr_files("5")
+    cmd = mock.call_args[0][0]
+    assert "--paginate" in cmd
+    assert any("pulls/5/files" in part for part in cmd)
 
 
 # ---------------------------------------------------------------------------

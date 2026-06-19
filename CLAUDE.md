@@ -47,7 +47,7 @@ src/gh_mcp/
   run.py          — run_ok(), _validate_ref(), CommandError, format_result
   tools/gh/
     _api.py                  — gh api REST + GraphQL helpers
-    pr_view.py               — pr_view, pr_checks, pr_review_threads
+    pr_view.py               — pr_view, pr_checks, pr_files, pr_review_threads
     pr_list.py               — pr_list
     pr_review.py             — pr_add_review, pr_reply_comment
     pr_resolve_thread.py     — pr_resolve_thread, pr_unresolve_thread
@@ -67,11 +67,11 @@ tests/
 
 ## Permission levels
 
-Tool names match Claude Code's `settings.json` permissions. All twelve tools are intended to be `allow` — the model picks them when the structured output or API access is worth it. Pair this with a Bash deny on `gh api …` so direct API calls go through these helpers instead.
+Tool names match Claude Code's `settings.json` permissions. All thirteen tools are intended to be `allow` — the model picks them when the structured output or API access is worth it. Pair this with a Bash deny on `gh api …` so direct API calls go through these helpers instead.
 
 | Tool | Permission | Notes |
 |------|-----------|-------|
-| `gh_pr_view`, `gh_pr_list`, `gh_pr_checks`, `gh_pr_review_threads` | `allow` | Read-only, composed summaries |
+| `gh_pr_view`, `gh_pr_list`, `gh_pr_checks`, `gh_pr_files`, `gh_pr_review_threads` | `allow` | Read-only, composed summaries |
 | `gh_run_view`, `gh_run_job_view` | `allow` | Read-only, useful when CI logs are large |
 | `gh_pr_add_review`, `gh_pr_reply_comment` | `allow` | Posts review content |
 | `gh_pr_edit_comment`, `gh_pr_delete_comment` | `allow` | Modifies review content |

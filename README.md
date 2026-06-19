@@ -15,9 +15,10 @@ Everything else — `git status`, `git diff`, `gh pr create`, `gh issue list`, e
 
 | Tool | What it does | Why it's here |
 |------|--------------|--------------|
-| `gh_pr_view` | PR details, body, reviews, comments, checks rollup | Token-reducing summary |
+| `gh_pr_view` | PR details, body, reviews, comments, checks rollup, review decision + pending reviewers | Token-reducing summary |
 | `gh_pr_list` | Open/closed PRs with mergeable state | Token-reducing summary |
 | `gh_pr_checks` | CI check status | Token-reducing summary |
+| `gh_pr_files` | Changed-files diffstat (status, +adds/-dels, renames), no patch blobs | Token-reducing summary for un-checked-out PRs |
 | `gh_run_view` | Workflow run status + job list | Token-reducing summary |
 | `gh_run_job_view` | Per-job details and (large) step logs | Helps when CI logs are massive |
 | `gh_pr_review_threads` | Inline review comments grouped into threads, filterable by bot/human/active/outdated/resolved/unresolved | REST + GraphQL combined; `gh` cannot do this |
@@ -82,7 +83,7 @@ src/gh_mcp/
 ├── run.py           # subprocess helpers + input validation
 └── tools/gh/
     ├── _api.py                # gh api GET/POST/PATCH/DELETE + GraphQL helpers
-    ├── pr_view.py             # pr_view, pr_checks, pr_review_threads
+    ├── pr_view.py             # pr_view, pr_checks, pr_files, pr_review_threads
     ├── pr_list.py             # pr_list
     ├── pr_review.py           # pr_add_review, pr_reply_comment
     ├── pr_resolve_thread.py   # pr_resolve_thread, pr_unresolve_thread

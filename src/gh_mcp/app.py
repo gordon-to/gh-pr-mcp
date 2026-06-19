@@ -7,7 +7,7 @@ mcp = FastMCP(
     instructions=(
         "Focused GitHub PR and review helpers for things the gh CLI can't do in one "
         "shot. Read-only summaries (gh_pr_view, gh_pr_list, gh_pr_checks, "
-        "gh_pr_review_threads, gh_run_view, gh_run_job_view) compose verbose gh/API "
+        "gh_pr_files, gh_pr_review_threads, gh_run_view, gh_run_job_view) compose verbose gh/API "
         "output into short text. The rest post or modify review content "
         "(gh_pr_add_review, gh_pr_reply_comment, gh_pr_edit_comment, "
         "gh_pr_delete_comment, gh_pr_resolve_thread, gh_pr_unresolve_thread). "
