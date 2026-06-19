@@ -1,4 +1,4 @@
-# gh-mcp — codebase guide
+# gh-pr-mcp — codebase guide
 
 ## Project overview
 

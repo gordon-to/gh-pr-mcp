@@ -3,18 +3,33 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "gh-mcp"
+name = "gh-pr-mcp"
 version = "0.1.0"
 description = "MCP server exposing a focused set of GitHub PR and review helpers the gh CLI can't do in one shot"
+readme = "README.md"
 requires-python = ">=3.13"
 license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
+authors = [{ name = "Adam Gordon", email = "adam.gordon@light.works" }]
+keywords = ["mcp", "github", "gh", "pull-request", "code-review", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Version Control :: Git",
+    "Environment :: Console",
+]
 dependencies = [
     "mcp[cli]>=1.6.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/gordon-to/gh-pr-mcp"
+Repository = "https://github.com/gordon-to/gh-pr-mcp"
+Issues = "https://github.com/gordon-to/gh-pr-mcp/issues"
+
 [project.scripts]
-gh-mcp = "gh_mcp.server:main"
+gh-pr-mcp = "gh_mcp.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/gh_mcp"]

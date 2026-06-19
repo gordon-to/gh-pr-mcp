@@ -3,7 +3,7 @@ from mcp.server.fastmcp import FastMCP
 from .run import CommandError
 
 mcp = FastMCP(
-    "gh-mcp",
+    "gh-pr-mcp",
     instructions=(
         "Focused GitHub PR and review helpers for things the gh CLI can't do in one "
         "shot. Read-only summaries (gh_pr_view, gh_pr_list, gh_pr_checks, "

@@ -38,7 +38,7 @@ def resolve_cwd(repo_path: str | None = None) -> str:
 
     an explicit repo_path wins. otherwise we must NOT fall back to our own
     process cwd: as a stdio MCP server we're launched with
-    `uv run --directory <base> gh-mcp`, so the process cwd is the server's
+    `uv run --directory <base> gh-pr-mcp`, so the process cwd is the server's
     source tree, almost never the repo the user is working in (this is the
     common case in a worktree). Claude Code exports the client's launch dir as
     CLAUDE_PROJECT_DIR (and PWD), so prefer those for repo auto-detection.

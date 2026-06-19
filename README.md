@@ -1,6 +1,8 @@
-# gh-mcp
+# gh-pr-mcp
 
-A minimal MCP (Model Context Protocol) server exposing a focused set of GitHub helpers that the `gh` CLI doesn't cover well: structured PR review threads, GraphQL thread resolve/unresolve, inline-comment review submission, and per-comment edit/delete via the REST API.
+A minimal MCP (Model Context Protocol) server exposing a focused set of GitHub PR and review helpers that the `gh` CLI doesn't cover well: structured PR review threads, GraphQL thread resolve/unresolve, inline-comment review submission, and per-comment edit/delete via the REST API.
+
+> Published to PyPI as `gh-pr-mcp`. The console script and MCP server are both named `gh-pr-mcp`.
 
 ## Philosophy
 
@@ -37,7 +39,7 @@ Recommended permission setup: allow everything in this server, and (separately) 
 uv sync
 uv run pytest          # tests
 uv run pyrefly check   # type check
-uv run gh-mcp          # run the server over stdio
+uv run gh-pr-mcp       # run the server over stdio
 ```
 
 ## MCP configuration
@@ -49,9 +51,9 @@ uv run gh-mcp          # run the server over stdio
 ```json
 {
   "mcpServers": {
-    "gh-mcp-dev": {
+    "gh-pr-mcp-dev": {
       "command": "uvx",
-      "args": ["--from", "/path/to/gh-mcp-dev", "gh-mcp"]
+      "args": ["--from", "/path/to/gh-pr-mcp-dev", "gh-pr-mcp"]
     }
   }
 }
@@ -59,14 +61,27 @@ uv run gh-mcp          # run the server over stdio
 
 ### Global config (stable)
 
-Install straight from the repo (not yet published to PyPI):
+From PyPI:
 
 ```json
 {
   "mcpServers": {
-    "gh-mcp": {
+    "gh-pr-mcp": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/gordon-to/gh-mcp", "gh-mcp"]
+      "args": ["gh-pr-mcp"]
+    }
+  }
+}
+```
+
+Or straight from the repo without PyPI:
+
+```json
+{
+  "mcpServers": {
+    "gh-pr-mcp": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/gordon-to/gh-pr-mcp", "gh-pr-mcp"]
     }
   }
 }

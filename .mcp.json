@@ -1,9 +1,9 @@
 {
   "mcpServers": {
-    "gh-mcp": {
+    "gh-pr-mcp": {
       "command": "uv",
-      "args": ["run", "gh-mcp"],
-      "description": "git + GitHub CLI tools (this worktree — restart Claude Code to hot-reload)"
+      "args": ["run", "gh-pr-mcp"],
+      "description": "GitHub PR and review helpers (this worktree — restart Claude Code to hot-reload)"
     }
   }
 }
