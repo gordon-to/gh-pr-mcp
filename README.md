@@ -1,5 +1,12 @@
 # gh-pr-mcp
 
+[![PyPI](https://img.shields.io/pypi/v/gh-pr-mcp.svg)](https://pypi.org/project/gh-pr-mcp/)
+[![Python](https://img.shields.io/pypi/pyversions/gh-pr-mcp.svg)](https://pypi.org/project/gh-pr-mcp/)
+[![CI](https://github.com/gordon-to/gh-pr-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/gordon-to/gh-pr-mcp/actions/workflows/ci.yml)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![MCP](https://img.shields.io/badge/MCP-server-1f6feb.svg)](https://modelcontextprotocol.io)
+
 A minimal MCP (Model Context Protocol) server exposing a focused set of GitHub PR and review helpers that the `gh` CLI doesn't cover well: structured PR review threads, GraphQL thread resolve/unresolve, inline-comment review submission, and per-comment edit/delete via the REST API.
 
 > Published to PyPI as `gh-pr-mcp`. The console script and MCP server are both named `gh-pr-mcp`.
