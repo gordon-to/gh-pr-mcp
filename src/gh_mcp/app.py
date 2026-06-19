@@ -5,11 +5,13 @@ from .run import CommandError
 mcp = FastMCP(
     "gh-mcp",
     instructions=(
-        "Tools for all git and GitHub CLI operations. "
-        "Read-only tools (git_status, git_diff, git_log, git_branch_list, "
-        "gh_pr_list, gh_issue_list, gh_run_list, gh_repo_view, gh_release_list) "
-        "are always safe. "
-        "Write tools that affect remotes or are destructive will ask for confirmation."
+        "Focused GitHub PR and review helpers for things the gh CLI can't do in one "
+        "shot. Read-only summaries (gh_pr_view, gh_pr_list, gh_pr_checks, "
+        "gh_pr_review_threads, gh_run_view, gh_run_job_view) compose verbose gh/API "
+        "output into short text. The rest post or modify review content "
+        "(gh_pr_add_review, gh_pr_reply_comment, gh_pr_edit_comment, "
+        "gh_pr_delete_comment, gh_pr_resolve_thread, gh_pr_unresolve_thread). "
+        "Use plain git and gh from the shell for everything else."
     ),
 )
 

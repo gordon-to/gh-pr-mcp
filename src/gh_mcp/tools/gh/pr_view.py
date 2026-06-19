@@ -1,9 +1,33 @@
 import json
 import subprocess
+from typing import TypedDict
 
 from ...app import tool
 from ...run import CommandError, format_result, resolve_cwd, run_ok
 from ._api import _api_repo, _gh_api_get, _gh_api_graphql, _repo_args
+
+
+class Author(TypedDict):
+    login: str
+    type: str
+
+
+class Reply(TypedDict):
+    id: int
+    author: Author
+    body: str
+
+
+class Thread(TypedDict):
+    thread_id: int
+    resolve_id: str
+    resolved: bool
+    file: str
+    line: int | None
+    outdated: bool
+    author: Author
+    body: str
+    replies: list[Reply]
 
 
 @tool("gh")
@@ -59,7 +83,7 @@ def pr_checks(pr: str | int, repo: str = "", repo_path: str = "") -> str:
     return format_result(run_ok(args, cwd=repo_path), f"gh pr checks {pr}")
 
 
-def _classify_author(user: dict) -> dict:
+def _classify_author(user: dict) -> Author:
     return {
         "login": user.get("login", ""),
         "type": "bot" if user.get("type") == "Bot" else "human",
@@ -187,7 +211,7 @@ def pr_review_threads(
         else:
             children.setdefault(parent, []).append(c)
 
-    threads = []
+    threads: list[Thread] = []
     for cid, root in roots.items():
         # position is null when the line the comment was on is no longer in the diff
         outdated = root.get("position") is None

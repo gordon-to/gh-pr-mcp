@@ -34,8 +34,9 @@ Recommended permission setup: allow everything in this server, and (separately) 
 
 ```bash
 uv sync
-uv run pytest
-uv run gh-mcp
+uv run pytest          # tests
+uv run pyrefly check   # type check
+uv run gh-mcp          # run the server over stdio
 ```
 
 ## MCP configuration
@@ -57,16 +58,20 @@ uv run gh-mcp
 
 ### Global config (stable)
 
+Install straight from the repo (not yet published to PyPI):
+
 ```json
 {
   "mcpServers": {
     "gh-mcp": {
       "command": "uvx",
-      "args": ["gh-mcp"]
+      "args": ["--from", "git+https://github.com/gordon-to/gh-mcp", "gh-mcp"]
     }
   }
 }
 ```
+
+`gh` must be installed and authenticated (`gh auth login`) — the tools shell out to it.
 
 ## Architecture
 
@@ -85,3 +90,7 @@ src/gh_mcp/
     ├── pr_delete_comment.py
     └── run_view.py            # run_view, run_job_view
 ```
+
+## License
+
+[AGPL-3.0-only](LICENSE). If you run a modified version as a network service, the AGPL requires you to offer that modified source to its users.
