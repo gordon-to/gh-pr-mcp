@@ -180,13 +180,13 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "mcp", extras = ["cli"], specifier = ">=2.0.0" }]
+requires-dist = [{ name = "mcp", extras = ["cli"], specifier = ">=2.0.0,<3.0.0" }]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "pyrefly", specifier = ">=0.16" },
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-asyncio", specifier = ">=0.23" },
+    { name = "pyrefly", specifier = ">=0.16,<2" },
+    { name = "pytest", specifier = ">=8.0,<10" },
+    { name = "pytest-asyncio", specifier = ">=0.23,<2" },
 ]
 
 [[package]]
