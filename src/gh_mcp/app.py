@@ -1,8 +1,8 @@
 import functools
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from .run import CommandError
 
-mcp = FastMCP(
+mcp = MCPServer(
     "gh-pr-mcp",
     instructions=(
         "Focused GitHub PR and review helpers for things the gh CLI can't do in one "
