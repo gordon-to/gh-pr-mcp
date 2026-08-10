@@ -52,7 +52,7 @@ def pr_add_review(
             }
         )
     endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/reviews"
-    raw = _gh_api_post(endpoint, payload, cwd=repo_path)
+    raw = _gh_api_post(endpoint, payload, cwd=repo_path, repo=repo)
     try:
         d = json.loads(raw)
         return f"review #{d['id']} submitted: {d['state']} by {d['user']['login']}"
@@ -77,7 +77,7 @@ def pr_reply_comment(
         raise CommandError("reply body must not be empty")
     endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/comments"
     payload = {"body": body, "in_reply_to": comment_id}
-    raw = _gh_api_post(endpoint, payload, cwd=repo_path)
+    raw = _gh_api_post(endpoint, payload, cwd=repo_path, repo=repo)
     try:
         d = json.loads(raw)
         return f"comment #{d['id']} posted by {d['user']['login']}: {d['body'][:100]}"

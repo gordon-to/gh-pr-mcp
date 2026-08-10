@@ -40,6 +40,10 @@ Everything else — `git status`, `git diff`, `gh pr create`, `gh issue list`, e
 
 Recommended permission setup: allow everything in this server, and (separately) deny `Bash(gh api …)` so the model is funnelled through these helpers rather than rolling its own API calls.
 
+### GitHub Enterprise
+
+Every tool picks the API host from the checkout's git remotes (gh's own remote order: `upstream`, `github`, `origin`), so enterprise repos work with no configuration as long as `gh auth login --hostname <host>` has been done. `GH_HOST` overrides the detection. The `repo` argument also accepts the three-part `host/owner/name` form when you need to target a different host than the checkout you're standing in.
+
 ## Development
 
 ```bash
