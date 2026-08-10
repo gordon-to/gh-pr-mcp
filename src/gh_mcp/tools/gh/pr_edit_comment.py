@@ -21,7 +21,7 @@ def pr_edit_comment(
     if not body.strip():
         raise CommandError("comment body must not be empty")
     endpoint = f"repos/{_api_repo(repo)}/pulls/comments/{comment_id}"
-    raw = _gh_api_patch(endpoint, {"body": body}, cwd=repo_path)
+    raw = _gh_api_patch(endpoint, {"body": body}, cwd=repo_path, repo=repo)
     try:
         d = json.loads(raw)
         return f"comment #{d['id']} updated by {d['user']['login']}: {d['body'][:120]}"

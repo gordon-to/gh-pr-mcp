@@ -31,7 +31,7 @@ def pr_list(
         "--json",
         "number,title,author,state,headRefName,updatedAt,isDraft,mergeable,mergeStateStatus",
     ]
-    args += _repo_args(repo)
+    args += _repo_args(repo, cwd=repo_path)
     if author:
         args += ["--author", author]
     if base:

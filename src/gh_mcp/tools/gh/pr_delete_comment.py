@@ -14,5 +14,5 @@ def pr_delete_comment(
     repo: optional 'owner/repo' override.
     """
     endpoint = f"repos/{_api_repo(repo)}/pulls/comments/{comment_id}"
-    _gh_api_delete(endpoint, cwd=repo_path)
+    _gh_api_delete(endpoint, cwd=repo_path, repo=repo)
     return f"comment #{comment_id} deleted"

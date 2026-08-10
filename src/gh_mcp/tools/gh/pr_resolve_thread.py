@@ -2,7 +2,6 @@ from ...app import tool
 from ...run import CommandError
 from ._api import _gh_api_graphql
 
-
 _RESOLVE = """
 mutation($id: ID!) {
   resolveReviewThread(input: {threadId: $id}) {
@@ -29,26 +28,28 @@ def _validate_thread_id(thread_id: str) -> str:
 
 
 @tool("gh")
-def pr_resolve_thread(thread_id: str) -> str:
+def pr_resolve_thread(thread_id: str, repo_path: str = "") -> str:
     """mark a PR review thread as resolved.
 
     thread_id: GraphQL node id from pr_review_threads (the 'resolve_id' field).
+    repo_path: optional local checkout to resolve the GitHub host from. Defaults to the current project directory (where Claude Code is running), so you rarely need to set it. Set it only to target a different checkout.
     """
     _validate_thread_id(thread_id)
-    data = _gh_api_graphql(_RESOLVE, {"id": thread_id})
+    data = _gh_api_graphql(_RESOLVE, {"id": thread_id}, cwd=repo_path)
     t = (data.get("resolveReviewThread") or {}).get("thread") or {}
     resolved = t.get("isResolved")
     return f"thread {t.get('id', thread_id)} resolved={resolved}"
 
 
 @tool("gh")
-def pr_unresolve_thread(thread_id: str) -> str:
+def pr_unresolve_thread(thread_id: str, repo_path: str = "") -> str:
     """mark a PR review thread as unresolved.
 
     thread_id: GraphQL node id from pr_review_threads (the 'resolve_id' field).
+    repo_path: optional local checkout to resolve the GitHub host from. Defaults to the current project directory (where Claude Code is running), so you rarely need to set it. Set it only to target a different checkout.
     """
     _validate_thread_id(thread_id)
-    data = _gh_api_graphql(_UNRESOLVE, {"id": thread_id})
+    data = _gh_api_graphql(_UNRESOLVE, {"id": thread_id}, cwd=repo_path)
     t = (data.get("unresolveReviewThread") or {}).get("thread") or {}
     resolved = t.get("isResolved")
     return f"thread {t.get('id', thread_id)} resolved={resolved}"

@@ -26,6 +26,7 @@ from gh_mcp.tools.gh import (
     run_job_view,
     run_view,
 )
+from gh_mcp.tools.gh._api import _remote_host, _repo_args, _url_host
 
 
 def _mock_run(returncode: int = 0, stdout: str = "", stderr: str = ""):
@@ -34,6 +35,12 @@ def _mock_run(returncode: int = 0, stdout: str = "", stderr: str = ""):
     m.stdout = stdout
     m.stderr = stderr
     return m
+
+
+@pytest.fixture(autouse=True)
+def _unset_gh_host(monkeypatch):
+    """a real GH_HOST in the dev environment would override host detection."""
+    monkeypatch.delenv("GH_HOST", raising=False)
 
 
 # ---------------------------------------------------------------------------
@@ -433,8 +440,18 @@ def _make_comment(
     }
 
 
-def _threads_side_effect(comments: list[dict], meta: dict | None = None) -> list:
-    """side_effect returning the REST-comments then the GraphQL-threads response.
+def _git_remote(host: str = "") -> MagicMock:
+    """stand-in for the `git remote -v` host probe each gh api call makes."""
+    if not host:
+        return _mock_run(stdout="")
+    return _mock_run(stdout=f"origin\thttps://{host}/o/r.git (fetch)\n")
+
+
+def _threads_side_effect(
+    comments: list[dict], meta: dict | None = None, host: str = ""
+) -> list:
+    """side_effect for pr_review_threads: host probe + REST comments, then host
+    probe + GraphQL threads.
 
     meta maps root comment databaseId -> {"resolve_id": str, "resolved": bool}.
     tests using this helper must pass repo="owner/name" to skip the repo-view call.
@@ -452,7 +469,9 @@ def _threads_side_effect(comments: list[dict], meta: dict | None = None) -> list
         "data": {"repository": {"pullRequest": {"reviewThreads": {"nodes": nodes}}}}
     }
     return [
+        _git_remote(host),
         _mock_run(stdout=json.dumps(comments)),
+        _git_remote(host),
         _mock_run(stdout=json.dumps(graphql)),
     ]
 
@@ -570,7 +589,7 @@ def test_pr_review_threads_empty_returns_json():
 def test_pr_review_threads_uses_api_endpoint():
     with patch("subprocess.run", side_effect=_threads_side_effect([])) as mock:
         pr_review_threads("7", repo="o/r")
-    cmd = mock.call_args_list[0][0][0]
+    cmd = mock.call_args_list[1][0][0]
     assert "api" in cmd
     assert "pulls/7/comments" in " ".join(cmd)
 
@@ -781,9 +800,8 @@ def test_pr_resolve_thread_surfaces_graphql_errors():
 def test_pr_resolve_thread_surfaces_nonzero_exit():
     with patch(
         "subprocess.run", return_value=_mock_run(returncode=1, stderr="HTTP 401")
-    ):
-        with pytest.raises(CommandError, match="HTTP 401"):
-            pr_resolve_thread("PRRT_abc")
+    ), pytest.raises(CommandError, match="HTTP 401"):
+        pr_resolve_thread("PRRT_abc")
 
 
 # ---------------------------------------------------------------------------
@@ -816,9 +834,8 @@ def test_pr_edit_comment_empty_body_raises():
 def test_pr_edit_comment_nonzero_exit_raises():
     with patch(
         "subprocess.run", return_value=_mock_run(returncode=1, stderr="HTTP 404")
-    ):
-        with pytest.raises(CommandError, match="HTTP 404"):
-            pr_edit_comment(comment_id=99, body="oops")
+    ), pytest.raises(CommandError, match="HTTP 404"):
+        pr_edit_comment(comment_id=99, body="oops")
 
 
 # ---------------------------------------------------------------------------
@@ -839,6 +856,122 @@ def test_pr_delete_comment_sends_delete_to_correct_endpoint():
 def test_pr_delete_comment_nonzero_exit_raises():
     with patch(
         "subprocess.run", return_value=_mock_run(returncode=1, stderr="HTTP 404")
+    ), pytest.raises(CommandError, match="HTTP 404"):
+        pr_delete_comment(comment_id=99)
+
+
+# ---------------------------------------------------------------------------
+# enterprise host resolution — gh api ignores the checkout's host by default
+# ---------------------------------------------------------------------------
+
+
+def test_url_host_parses_https_ssh_and_scp_urls():
+    assert (
+        _url_host("https://ai-consortium.ghe.com/AI-Consortium/luminate.git")
+        == "ai-consortium.ghe.com"
+    )
+    assert _url_host("git@github.com:ag/gh-mcp.git") == "github.com"
+    assert _url_host("ssh://git@ghe.example.com:2222/o/r.git") == "ghe.example.com"
+    assert _url_host("/local/path/repo.git") == ""
+    assert _url_host('{"data":') == ""
+
+
+def test_remote_host_prefers_origin_over_unranked_remotes():
+    remotes = (
+        "github-backup\tgit@github.com:o/r.git (fetch)\n"
+        "origin\thttps://ghe.example.com/o/r.git (fetch)\n"
+        "origin\thttps://ghe.example.com/o/r.git (push)\n"
+    )
+    with patch("subprocess.run", return_value=_mock_run(stdout=remotes)):
+        assert _remote_host() == "ghe.example.com"
+
+
+def test_remote_host_prefers_upstream_over_origin():
+    remotes = (
+        "origin\thttps://github.com/o/fork.git (fetch)\n"
+        "upstream\thttps://ghe.example.com/o/r.git (fetch)\n"
+    )
+    with patch("subprocess.run", return_value=_mock_run(stdout=remotes)):
+        assert _remote_host() == "ghe.example.com"
+
+
+def test_remote_host_empty_outside_a_git_repo():
+    with patch(
+        "subprocess.run",
+        return_value=_mock_run(returncode=128, stderr="not a git repository"),
     ):
-        with pytest.raises(CommandError, match="HTTP 404"):
-            pr_delete_comment(comment_id=99)
+        assert _remote_host() == ""
+
+
+def test_remote_host_env_override_skips_git(monkeypatch):
+    monkeypatch.setenv("GH_HOST", "ghe.example.com")
+    with patch("subprocess.run", side_effect=AssertionError("should not run git")):
+        assert _remote_host() == "ghe.example.com"
+
+
+def test_gh_api_targets_the_checkouts_enterprise_host():
+    with patch(
+        "subprocess.run",
+        side_effect=[_git_remote("ghe.example.com"), _mock_run(stdout="[]")],
+    ) as mock:
+        pr_files("7")
+    assert mock.call_args[0][0][:4] == ["gh", "api", "--hostname", "ghe.example.com"]
+
+
+def test_gh_api_omits_hostname_when_remote_is_unknown():
+    with patch(
+        "subprocess.run", side_effect=[_git_remote(), _mock_run(stdout="[]")]
+    ) as mock:
+        pr_files("7")
+    assert "--hostname" not in mock.call_args[0][0]
+
+
+def test_gh_api_takes_host_from_three_part_repo_spec():
+    with patch("subprocess.run", return_value=_mock_run(stdout="[]")) as mock:
+        pr_files("7", repo="ghe.example.com/o/r")
+    cmd = mock.call_args[0][0]
+    assert cmd[:4] == ["gh", "api", "--hostname", "ghe.example.com"]
+    assert "repos/o/r/pulls/7/files" in " ".join(cmd)
+    assert mock.call_count == 1
+
+
+def test_pr_review_threads_uses_enterprise_host_for_rest_and_graphql():
+    with patch(
+        "subprocess.run", side_effect=_threads_side_effect([], host="ghe.example.com")
+    ) as mock:
+        pr_review_threads("5", repo="o/r")
+    rest = mock.call_args_list[1][0][0]
+    graphql = mock.call_args_list[3][0][0]
+    assert rest[:4] == ["gh", "api", "--hostname", "ghe.example.com"]
+    assert graphql[:5] == ["gh", "api", "--hostname", "ghe.example.com", "graphql"]
+
+
+def test_pr_resolve_thread_uses_enterprise_host():
+    response = _graphql_response("resolveReviewThread", "PRRT_abc", True)
+    with patch(
+        "subprocess.run",
+        side_effect=[_git_remote("ghe.example.com"), _mock_run(stdout=response)],
+    ) as mock:
+        pr_resolve_thread("PRRT_abc")
+    assert mock.call_args[0][0][:5] == [
+        "gh",
+        "api",
+        "--hostname",
+        "ghe.example.com",
+        "graphql",
+    ]
+
+
+def test_repo_args_qualifies_repo_with_the_checkout_host():
+    with patch("subprocess.run", return_value=_git_remote("ghe.example.com")):
+        assert _repo_args("o/r") == ["-R", "ghe.example.com/o/r"]
+
+
+def test_repo_args_passes_three_part_spec_through_without_probing():
+    with patch("subprocess.run", side_effect=AssertionError("should not run git")):
+        assert _repo_args("ghe.example.com/o/r") == ["-R", "ghe.example.com/o/r"]
+
+
+def test_repo_args_empty_without_repo():
+    with patch("subprocess.run", side_effect=AssertionError("should not run git")):
+        assert _repo_args("") == []

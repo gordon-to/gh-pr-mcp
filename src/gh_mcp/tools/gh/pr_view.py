@@ -45,7 +45,7 @@ def pr_view(pr: str | int, repo: str = "", repo_path: str = "") -> str:
         "--json",
         "number,title,author,state,body,baseRefName,headRefName,reviews,comments,isDraft,mergeable,statusCheckRollup,reviewDecision,reviewRequests",
     ]
-    args += _repo_args(repo)
+    args += _repo_args(repo, cwd=repo_path)
     raw = run_ok(args, cwd=repo_path)
     try:
         d = json.loads(raw)
@@ -83,7 +83,7 @@ def pr_view(pr: str | int, repo: str = "", repo_path: str = "") -> str:
 @tool("gh")
 def pr_checks(pr: str | int, repo: str = "", repo_path: str = "") -> str:
     """show CI check status for a pull request (gh pr checks)."""
-    args = ["gh", "pr", "checks", str(pr)] + _repo_args(repo)
+    args = ["gh", "pr", "checks", str(pr)] + _repo_args(repo, cwd=repo_path)
     return format_result(run_ok(args, cwd=repo_path), f"gh pr checks {pr}")
 
 
@@ -109,7 +109,9 @@ def pr_files(pr: str | int, repo: str = "", repo_path: str = "") -> str:
     repo_path: optional local checkout to resolve the repo from. Defaults to the current project directory (where Claude Code is running), so you rarely need to set it. Set it only to target a different checkout.
     """
     endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/files?per_page=100"
-    files = json.loads(_gh_api_get(endpoint, paginate=True, cwd=repo_path))
+    files = json.loads(
+        _gh_api_get(endpoint, paginate=True, cwd=repo_path, repo=repo)
+    )
     if not files:
         return "no files changed"
     total_add = sum(f.get("additions", 0) for f in files)
@@ -189,7 +191,10 @@ def _fetch_thread_meta(pr: int, repo: str, cwd: str = ".") -> dict[int, dict]:
     """map root-comment databaseId -> {resolve_id, resolved}."""
     owner, name = _resolve_owner_name(repo, cwd=cwd)
     data = _gh_api_graphql(
-        _THREADS_QUERY, {"owner": owner, "name": name, "number": pr}, cwd=cwd
+        _THREADS_QUERY,
+        {"owner": owner, "name": name, "number": pr},
+        cwd=cwd,
+        repo=repo,
     )
     threads = (
         ((data.get("repository") or {}).get("pullRequest") or {}).get("reviewThreads")
@@ -251,7 +256,9 @@ def pr_review_threads(
         )
 
     endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/comments?per_page=100"
-    comments: list[dict] = json.loads(_gh_api_get(endpoint, cwd=repo_path))
+    comments: list[dict] = json.loads(
+        _gh_api_get(endpoint, cwd=repo_path, repo=repo)
+    )
     thread_meta = _fetch_thread_meta(int(pr), repo, cwd=repo_path)
 
     roots: dict[int, dict] = {}

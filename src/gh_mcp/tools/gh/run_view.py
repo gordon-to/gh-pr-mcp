@@ -10,7 +10,7 @@ def run_view(
     run_id: str | int, repo: str = "", log: bool = False, repo_path: str = ""
 ) -> str:
     """view a workflow run's details or logs (gh run view)."""
-    args = ["gh", "run", "view", str(run_id)] + _repo_args(repo)
+    args = ["gh", "run", "view", str(run_id)] + _repo_args(repo, cwd=repo_path)
     if log:
         args.append("--log")
     else:
@@ -52,7 +52,7 @@ def run_job_view(
     job_name: partial match for the job name shown in run_view output.
     log: fetch full step-by-step logs for the job.
     """
-    args = ["gh", "run", "view", str(run_id)] + _repo_args(repo)
+    args = ["gh", "run", "view", str(run_id)] + _repo_args(repo, cwd=repo_path)
     if job_name:
         args += ["--job", job_name]
     if log:
