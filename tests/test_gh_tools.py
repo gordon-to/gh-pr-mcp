@@ -6,6 +6,7 @@ commands/payloads and parse responses correctly.
 """
 
 import json
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -50,6 +51,10 @@ def _unset_gh_host(monkeypatch):
 
 def test_resolve_cwd_explicit_path_wins(tmp_path):
     assert resolve_cwd(str(tmp_path)) == str(tmp_path)
+
+
+def test_resolve_cwd_expands_tilde():
+    assert resolve_cwd("~/somewhere") == os.path.expanduser("~/somewhere")
 
 
 def test_resolve_cwd_falls_back_to_claude_project_dir(tmp_path):
@@ -273,9 +278,7 @@ def test_pr_view_omits_review_lines_when_absent():
 
 
 def test_pr_view_requests_review_decision_fields():
-    with patch(
-        "subprocess.run", return_value=_mock_run(stdout="{}")
-    ) as mock:
+    with patch("subprocess.run", return_value=_mock_run(stdout="{}")) as mock:
         pr_view("9")
     json_arg = mock.call_args[0][0][mock.call_args[0][0].index("--json") + 1]
     assert "reviewDecision" in json_arg
@@ -399,12 +402,133 @@ def test_run_job_view_formats_steps():
     assert "failure" in result
 
 
-def test_run_job_view_with_job_name_passes_flag():
-    with patch("subprocess.run", return_value=_mock_run(stdout="log output")) as mock:
-        run_job_view("123", job_name="test", log=True)
+_JOBS_JSON = json.dumps(
+    {
+        "jobs": [
+            {
+                "databaseId": 42,
+                "name": "OSS Licence Scan",
+                "status": "completed",
+                "conclusion": "success",
+                "steps": [
+                    {"name": "Checkout", "conclusion": "success", "status": "completed"}
+                ],
+            },
+            {
+                "databaseId": 43,
+                "name": "build (3.12)",
+                "status": "completed",
+                "conclusion": "failure",
+                "steps": [],
+            },
+        ]
+    }
+)
+
+
+def test_run_job_view_resolves_job_name_to_id():
+    # gh's --job flag wants a numeric id; a name must resolve via the job list
+    responses = [
+        _mock_run(stdout=_JOBS_JSON),
+        _mock_run(stdout="OSS Licence Scan\tCheckout\t2024-03-01T10:00:00Z hello"),
+    ]
+    with patch("subprocess.run", side_effect=responses) as mock:
+        result = run_job_view("123", job_name="licence", log=True)
     cmd = mock.call_args[0][0]
-    assert "--job" in cmd
+    i = cmd.index("--job")
+    assert cmd[i + 1] == "42"
     assert "--log" in cmd
+    assert "hello" in result
+
+
+def test_run_job_view_numeric_id_skips_resolution():
+    with patch("subprocess.run", return_value=_mock_run(stdout="x\ty\tz")) as mock:
+        run_job_view("123", job_name="42", log=True)
+    assert mock.call_count == 1
+    cmd = mock.call_args[0][0]
+    i = cmd.index("--job")
+    assert cmd[i + 1] == "42"
+    assert "--log" in cmd
+
+
+def test_run_job_view_name_match_composes_summary():
+    # a matched name returns the composed step summary, not raw json
+    with patch("subprocess.run", return_value=_mock_run(stdout=_JOBS_JSON)) as mock:
+        result = run_job_view("123", job_name="licence")
+    assert mock.call_count == 1
+    assert "OSS Licence Scan" in result
+    assert "Checkout" in result
+    assert "build (3.12)" not in result
+    assert not result.lstrip().startswith("{")
+
+
+def test_run_job_view_exact_match_beats_substring():
+    jobs = {
+        "jobs": [
+            {"databaseId": 1, "name": "build", "conclusion": "success", "steps": []},
+            {
+                "databaseId": 2,
+                "name": "build-docs",
+                "conclusion": "success",
+                "steps": [],
+            },
+        ]
+    }
+    with patch("subprocess.run", return_value=_mock_run(stdout=json.dumps(jobs))):
+        result = run_job_view("123", job_name="build")
+    assert "id 1" in result
+    assert "build-docs" not in result
+
+
+def test_run_job_view_unknown_name_lists_jobs():
+    with patch("subprocess.run", return_value=_mock_run(stdout=_JOBS_JSON)):
+        with pytest.raises(CommandError, match="OSS Licence Scan"):
+            run_job_view("123", job_name="nope")
+
+
+def test_run_job_view_ambiguous_name_lists_matches():
+    with patch("subprocess.run", return_value=_mock_run(stdout=_JOBS_JSON)):
+        with pytest.raises(CommandError, match="matches multiple"):
+            run_job_view("123", job_name="i")
+
+
+def test_run_job_view_log_strips_timestamps_and_groups_steps():
+    raw = "\n".join(
+        [
+            "CI\tSet up job\t﻿2024-03-01T10:00:00.1234567Z first",
+            "CI\tSet up job\t2024-03-01T10:00:01.1234567Z second",
+            "CI\tRun tests\t2024-03-01T10:00:02.1234567Z third",
+        ]
+    )
+    with patch("subprocess.run", return_value=_mock_run(stdout=raw)):
+        result = run_job_view("123", job_name="42", log=True)
+    assert result.splitlines() == [
+        "== CI / Set up job ==",
+        "first",
+        "second",
+        "== CI / Run tests ==",
+        "third",
+    ]
+
+
+def test_run_job_view_log_strips_ansi():
+    raw = "CI\tRun tests\t2024-03-01T10:00:00Z \x1b[31merror\x1b[0m here"
+    with patch("subprocess.run", return_value=_mock_run(stdout=raw)):
+        result = run_job_view("123", job_name="42", log=True)
+    assert "error here" in result
+    assert "\x1b" not in result
+
+
+def test_run_job_view_log_tails_long_output():
+    raw = "\n".join(f"CI\tRun tests\t2024-03-01T10:00:00Z line {i}" for i in range(500))
+    with patch("subprocess.run", return_value=_mock_run(stdout=raw)):
+        result = run_job_view("123", job_name="42", log=True)
+    lines = result.splitlines()
+    assert "omitted" in lines[0]
+    assert lines[1] == "== CI / Run tests =="
+    assert lines[-1] == "line 499"
+    assert "line 0" not in result
+    assert len(lines) < 500
 
 
 def test_run_job_view_empty_jobs():
@@ -798,9 +922,12 @@ def test_pr_resolve_thread_surfaces_graphql_errors():
 
 
 def test_pr_resolve_thread_surfaces_nonzero_exit():
-    with patch(
-        "subprocess.run", return_value=_mock_run(returncode=1, stderr="HTTP 401")
-    ), pytest.raises(CommandError, match="HTTP 401"):
+    with (
+        patch(
+            "subprocess.run", return_value=_mock_run(returncode=1, stderr="HTTP 401")
+        ),
+        pytest.raises(CommandError, match="HTTP 401"),
+    ):
         pr_resolve_thread("PRRT_abc")
 
 
@@ -832,9 +959,12 @@ def test_pr_edit_comment_empty_body_raises():
 
 
 def test_pr_edit_comment_nonzero_exit_raises():
-    with patch(
-        "subprocess.run", return_value=_mock_run(returncode=1, stderr="HTTP 404")
-    ), pytest.raises(CommandError, match="HTTP 404"):
+    with (
+        patch(
+            "subprocess.run", return_value=_mock_run(returncode=1, stderr="HTTP 404")
+        ),
+        pytest.raises(CommandError, match="HTTP 404"),
+    ):
         pr_edit_comment(comment_id=99, body="oops")
 
 
@@ -854,9 +984,12 @@ def test_pr_delete_comment_sends_delete_to_correct_endpoint():
 
 
 def test_pr_delete_comment_nonzero_exit_raises():
-    with patch(
-        "subprocess.run", return_value=_mock_run(returncode=1, stderr="HTTP 404")
-    ), pytest.raises(CommandError, match="HTTP 404"):
+    with (
+        patch(
+            "subprocess.run", return_value=_mock_run(returncode=1, stderr="HTTP 404")
+        ),
+        pytest.raises(CommandError, match="HTTP 404"),
+    ):
         pr_delete_comment(comment_id=99)
 
 
