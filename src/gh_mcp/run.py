@@ -44,7 +44,7 @@ def resolve_cwd(repo_path: str | None = None) -> str:
     CLAUDE_PROJECT_DIR (and PWD), so prefer those for repo auto-detection.
     """
     if repo_path and repo_path not in (".", ""):
-        return repo_path
+        return os.path.expanduser(repo_path)
     for var in ("CLAUDE_PROJECT_DIR", "PWD"):
         val = os.environ.get(var)
         if val and os.path.isdir(val):

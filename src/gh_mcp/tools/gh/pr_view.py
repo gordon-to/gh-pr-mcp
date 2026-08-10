@@ -109,9 +109,7 @@ def pr_files(pr: str | int, repo: str = "", repo_path: str = "") -> str:
     repo_path: optional local checkout to resolve the repo from. Defaults to the current project directory (where Claude Code is running), so you rarely need to set it. Set it only to target a different checkout.
     """
     endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/files?per_page=100"
-    files = json.loads(
-        _gh_api_get(endpoint, paginate=True, cwd=repo_path, repo=repo)
-    )
+    files = json.loads(_gh_api_get(endpoint, paginate=True, cwd=repo_path, repo=repo))
     if not files:
         return "no files changed"
     total_add = sum(f.get("additions", 0) for f in files)
@@ -256,9 +254,7 @@ def pr_review_threads(
         )
 
     endpoint = f"repos/{_api_repo(repo)}/pulls/{pr}/comments?per_page=100"
-    comments: list[dict] = json.loads(
-        _gh_api_get(endpoint, cwd=repo_path, repo=repo)
-    )
+    comments: list[dict] = json.loads(_gh_api_get(endpoint, cwd=repo_path, repo=repo))
     thread_meta = _fetch_thread_meta(int(pr), repo, cwd=repo_path)
 
     roots: dict[int, dict] = {}
