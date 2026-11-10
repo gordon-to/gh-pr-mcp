@@ -86,7 +86,12 @@ def _api_repo(repo: str) -> str:
     travels via --hostname instead); otherwise use gh's {owner}/{repo}
     placeholder which resolves from the current git remote.
     """
-    return _split_repo(repo)[1] or "{owner}/{repo}"
+    owner_name = _split_repo(repo)[1]
+    if owner_name and "/" not in owner_name:
+        raise CommandError(
+            f"repo must be 'owner/name' or 'host/owner/name', got {repo!r}"
+        )
+    return owner_name or "{owner}/{repo}"
 
 
 def _gh_api_get(

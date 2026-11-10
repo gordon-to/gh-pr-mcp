@@ -24,6 +24,11 @@ def _validate_thread_id(thread_id: str) -> str:
         raise CommandError(
             "thread_id must be a non-empty string (GraphQL node id from pr_review_threads.resolve_id)"
         )
+    if thread_id.strip().isdigit():
+        raise CommandError(
+            f"thread_id {thread_id!r} is a numeric comment id. Pass the thread's "
+            "resolve_id (PRRT_...) from pr_review_threads instead"
+        )
     return thread_id
 
 
