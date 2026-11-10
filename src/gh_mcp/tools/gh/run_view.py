@@ -93,7 +93,7 @@ def _compose_log(raw: str, command: str) -> str:
 
 @tool("gh")
 def run_job_view(
-    run_id: str | int,
+    run_id: str | int = "",
     job_name: str = "",
     repo: str = "",
     log: bool = False,
@@ -101,11 +101,20 @@ def run_job_view(
 ) -> str:
     """view details or logs for a specific job within a run (gh run view --job).
 
+    run_id: the run's id. optional when job_name is a numeric job id.
     job_name: numeric job id, or a case-insensitive partial match on the job
     names shown in run_view output.
     log: fetch the job's step logs (timestamps stripped, long output tailed).
     """
-    base = ["gh", "run", "view", str(run_id)] + _repo_args(repo, cwd=repo_path)
+    run_id = str(run_id).strip()
+    if not run_id and not job_name.isdigit():
+        raise CommandError(
+            "run_id is required unless job_name is a numeric job id "
+            "(the id in a checks url: .../actions/runs/<run_id>/job/<job_id>)"
+        )
+    base = ["gh", "run", "view", *([run_id] if run_id else [])] + _repo_args(
+        repo, cwd=repo_path
+    )
 
     def load_jobs(job_id: str = "") -> list[dict]:
         args = base + (["--job", job_id] if job_id else []) + ["--json", "jobs"]

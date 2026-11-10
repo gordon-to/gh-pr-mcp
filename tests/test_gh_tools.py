@@ -5,12 +5,15 @@ hitting the real GitHub API. We verify that tools construct the right
 commands/payloads and parse responses correctly.
 """
 
+import asyncio
 import json
 import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 
+from gh_mcp.app import mcp
 from gh_mcp.run import CommandError, resolve_cwd
 from gh_mcp.tools.gh import (
     pr_add_review,
@@ -1108,3 +1111,52 @@ def test_repo_args_passes_three_part_spec_through_without_probing():
 def test_repo_args_empty_without_repo():
     with patch("subprocess.run", side_effect=AssertionError("should not run git")):
         assert _repo_args("") == []
+
+
+def test_pr_review_threads_accepts_host_qualified_repo():
+    _, rest_response, _, graphql_response = _threads_side_effect([])
+    with patch("subprocess.run", side_effect=[rest_response, graphql_response]) as mock:
+        pr_review_threads("5", repo="ghe.example.com/o/r")
+    rest = mock.call_args_list[0][0][0]
+    graphql = mock.call_args_list[1][0][0]
+    assert rest[:4] == ["gh", "api", "--hostname", "ghe.example.com"]
+    assert graphql[:5] == ["gh", "api", "--hostname", "ghe.example.com", "graphql"]
+    variables = json.loads(mock.call_args_list[1][1]["input"])["variables"]
+    assert variables["owner"] == "o"
+    assert variables["name"] == "r"
+
+
+def test_pr_add_review_rejects_repo_without_owner():
+    with (
+        patch("subprocess.run", side_effect=AssertionError("should not call gh")),
+        pytest.raises(CommandError, match="owner/name"),
+    ):
+        pr_add_review("5", event="COMMENT", body="x", repo="r")
+
+
+def test_pr_resolve_thread_rejects_numeric_comment_id():
+    with (
+        patch("subprocess.run", side_effect=AssertionError("should not call gh")),
+        pytest.raises(CommandError, match="resolve_id"),
+    ):
+        pr_resolve_thread("2345678901")
+
+
+def test_run_job_view_numeric_job_id_needs_no_run_id():
+    with patch("subprocess.run", return_value=_mock_run(stdout="x\ty\tz")) as mock:
+        run_job_view(job_name="42", log=True)
+    cmd = mock.call_args[0][0]
+    assert cmd[:5] == ["gh", "run", "view", "--job", "42"]
+
+
+def test_run_job_view_job_name_without_run_id_raises():
+    with (
+        patch("subprocess.run", side_effect=AssertionError("should not call gh")),
+        pytest.raises(CommandError, match="run_id is required"),
+    ):
+        run_job_view(job_name="build")
+
+
+def test_registered_tool_reports_command_error_as_failed_call():
+    with pytest.raises(ToolError, match="thread_id must be a non-empty string"):
+        asyncio.run(mcp.call_tool("gh_pr_resolve_thread", {"thread_id": ""}))

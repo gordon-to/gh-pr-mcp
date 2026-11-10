@@ -4,7 +4,7 @@ from typing import TypedDict
 
 from ...app import tool
 from ...run import CommandError, format_result, resolve_cwd, run_ok
-from ._api import _api_repo, _gh_api_get, _gh_api_graphql, _repo_args
+from ._api import _api_repo, _gh_api_get, _gh_api_graphql, _repo_args, _split_repo
 
 
 class Author(TypedDict):
@@ -164,9 +164,12 @@ query($owner: String!, $name: String!, $number: Int!) {
 def _resolve_owner_name(repo: str, cwd: str = ".") -> tuple[str, str]:
     """return (owner, name). if repo is empty, query the current remote."""
     if repo:
-        if "/" not in repo:
-            raise CommandError(f"repo must be 'owner/name', got {repo!r}")
-        owner, name = repo.split("/", 1)
+        owner_name = _split_repo(repo)[1]
+        if "/" not in owner_name:
+            raise CommandError(
+                f"repo must be 'owner/name' or 'host/owner/name', got {repo!r}"
+            )
+        owner, name = owner_name.split("/", 1)
         return owner, name
     result = subprocess.run(
         ["gh", "repo", "view", "--json", "owner,name"],

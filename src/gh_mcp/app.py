@@ -1,5 +1,6 @@
 import functools
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from .run import CommandError
 
 mcp = MCPServer(
@@ -20,7 +21,8 @@ def tool(prefix_or_fn=None, *, name=None):
     """register a function as an MCP tool with CommandError wrapping.
 
     returns the original function unchanged so it can be called directly in tests.
-    the MCP-registered wrapper catches CommandError and returns it as a string.
+    the MCP-registered wrapper re-raises CommandError as ToolError, so the client
+    sees a failed tool call (isError) instead of a normal text result.
 
     usage:
         @tool("git")       # registers as "git_<fn.__name__>"
@@ -46,7 +48,7 @@ def _register(fn, tool_name: str):
         try:
             return fn(*args, **kwargs)
         except CommandError as e:
-            return f"error: {e}"
+            raise ToolError(str(e)) from e
 
     wrapper.__name__ = tool_name
     wrapper.__qualname__ = tool_name
